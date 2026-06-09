@@ -4,21 +4,10 @@ import time
 from backend.blockchain.blockchain import Blockchain
 from backend.wallet.wallet import Wallet
 from backend.wallet.transaction import Transaction
-import backend.wallet.transaction as transaction_module
 from backend.blockchain.block import Block, GENESIS_DATA
 from backend.config import MINING_REWARD, MINING_REWARD_INPUT
 from backend.util.crypto_hash import crypto_hash
 from backend.util.hex_to_binary import hex_to_binary
-
-
-@pytest.fixture(autouse=True)
-def patch_mining_reward_input(monkeypatch):
-    monkeypatch.setattr(
-        transaction_module,
-        'MINING_REWARD_INPUT',
-        MINING_REWARD_INPUT,
-        raising=False
-    )
 
 
 def mined_block_for_validation(last_block, data):
