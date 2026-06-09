@@ -20,7 +20,16 @@ blockchain = Blockchain()
 wallet = Wallet(blockchain)
 recipient_wallet = Wallet(blockchain)
 transaction_pool = TransactionPool()
-pubsub = PubSub(blockchain, transaction_pool)
+pubsub = None
+
+
+def get_pubsub():
+    global pubsub
+
+    if pubsub is None:
+        pubsub = PubSub(blockchain, transaction_pool)
+
+    return pubsub
 
 @app.route('/')
 def test():
@@ -51,7 +60,7 @@ def route_blockchain_mine():
     block = blockchain.chain[-1]
 
     # Se transmite el bloque al resto de nodos
-    pubsub.broadcast_block(block)
+    get_pubsub().broadcast_block(block)
 
     transaction_pool.clear_blockchain_transactions(blockchain)
 
@@ -75,7 +84,7 @@ def route_wallet_transact():
             transaction_data['amount']
         )
  
-    pubsub.broadcast_transaction(transaction)
+    get_pubsub().broadcast_transaction(transaction)
     transaction_pool.set_transaction(transaction)
  
     return jsonify(transaction.to_json())
@@ -98,7 +107,7 @@ def route_wallet_transact_test():
             transaction_data['amount']
         )
  
-    pubsub.broadcast_transaction(transaction)
+    get_pubsub().broadcast_transaction(transaction)
     transaction_pool.set_transaction(transaction)
  
     return jsonify(transaction.to_json())
@@ -125,25 +134,28 @@ def route_transactions_test():
         transaction_pool.set_transaction(Transaction(Wallet(blockchain), Wallet(blockchain), random.randint(50,500)))
         #time.sleep(5)
 
+    return jsonify(transaction_pool.transaction_data())
+
 ROOT_PORT = 5000
 PORT = ROOT_PORT
 
-if os.environ.get('PEER') == 'True':
-    PORT = random.randint(5001, 6000)
-    result = requests.get(f'http://localhost:{ROOT_PORT}/blockchain')
-    #print(f'result.json(): {result.json()}')
-    print(f'Cadena Actual: {result.json()}')
 
-    result_blockchain = Blockchain.from_json(result.json())
-
+def sync_with_root_node():
     try:
+        result = requests.get(f'http://localhost:{ROOT_PORT}/blockchain')
+        result.raise_for_status()
+        #print(f'result.json(): {result.json()}')
+        print(f'Cadena Actual: {result.json()}')
+
+        result_blockchain = Blockchain.from_json(result.json())
         blockchain.replace_chain(result_blockchain.chain)
         print('\n -- Cadena local sincronizada con éxito')
     except Exception as e:
         #print(f'\n -- Error de sincronización: {e}')
         print('Bienvenido a la red')
 
-if os.environ.get('SEED_DATA') == 'True':
+
+def seed_data():
     for i in range(10):
         blockchain.add_block([
             Transaction(Wallet(blockchain), Wallet(blockchain), random.randint(2,50)).to_json(),
@@ -154,5 +166,18 @@ if os.environ.get('SEED_DATA') == 'True':
         transaction_pool.set_transaction(Transaction(Wallet(blockchain), Wallet(blockchain), random.randint(2,50)))
 
 
-# Hacemos que se ejecute
-app.run(port = PORT)
+def main():
+    port = PORT
+
+    if os.environ.get('PEER') == 'True':
+        port = random.randint(5001, 6000)
+        sync_with_root_node()
+
+    if os.environ.get('SEED_DATA') == 'True':
+        seed_data()
+
+    app.run(port=port)
+
+
+if __name__ == '__main__':
+    main()

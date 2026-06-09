@@ -2,7 +2,7 @@ import time
 import uuid
 
 from backend.wallet.wallet import Wallet
-from backend.config import MINING_REWARD, ADDRESS_REWARD
+from backend.config import MINING_REWARD, MINING_REWARD_INPUT
 
 class Transaction:
     """
@@ -106,23 +106,10 @@ class Transaction:
         """
         Genera la recompensa por minar una transaccion
         """
-        output = {}
-        output[miner_wallet.address] = MINING_REWARD 
-
-        return Transaction(input= {
-            'timestamp': time.time_ns(),
-            'amount': '',
-            'address': ADDRESS_REWARD,
-            'public_key': '',
-            'signature': ''
-        }, output = {
-            'recipients_address': miner_wallet.address,
-            'amount_received': MINING_REWARD,
-            'recipients_signature': 'AUTO',
-            'recipients_public_key': miner_wallet.public_key,
-            'sender_balance': '',
-            miner_wallet.address: MINING_REWARD
-        })
+        return Transaction(
+            input=MINING_REWARD_INPUT,
+            output={miner_wallet.address: MINING_REWARD}
+        )
 
 
 

@@ -5,14 +5,6 @@ from backend.wallet.wallet import Wallet
 from backend.config import MINING_REWARD, MINING_REWARD_INPUT
 
 
-def valid_reward_transaction(miner_wallet=None):
-    miner_wallet = miner_wallet or Wallet()
-    return Transaction(
-        input=dict(MINING_REWARD_INPUT),
-        output={miner_wallet.address: MINING_REWARD}
-    )
-
-
 def test_transaction():
     sender_wallet = Wallet()
     recipient = 'recipient'
@@ -85,21 +77,15 @@ def test_reward_transaction():
     miner_wallet = Wallet()
     transaction = Transaction.reward_transaction(miner_wallet)
 
-    assert transaction.input['address'] == MINING_REWARD_INPUT['address']
-    assert 'timestamp' in transaction.input
-    assert transaction.input['amount'] == ''
-    assert transaction.input['public_key'] == ''
-    assert transaction.input['signature'] == ''
-    assert transaction.output['recipients_address'] == miner_wallet.address
-    assert transaction.output['amount_received'] == MINING_REWARD
+    assert transaction.input == MINING_REWARD_INPUT
     assert transaction.output[miner_wallet.address] == MINING_REWARD
 
 def test_valid_reward_transaction():
-    reward_transaction = valid_reward_transaction()
+    reward_transaction = Transaction.reward_transaction(Wallet())
     Transaction.is_valid_transaction(reward_transaction)
 
 def test_invalid_reward_transaction_extra_recipient():
-    reward_transaction = valid_reward_transaction()
+    reward_transaction = Transaction.reward_transaction(Wallet())
     reward_transaction.output['extra_recipient'] = 60
 
     with pytest.raises(Exception, match = 'Recompensa de mineria invalida'):
@@ -107,7 +93,7 @@ def test_invalid_reward_transaction_extra_recipient():
 
 def test_invalid_reward_transaction_invalid_amount():
     miner_wallet = Wallet()
-    reward_transaction = valid_reward_transaction(miner_wallet)
+    reward_transaction = Transaction.reward_transaction(miner_wallet)
     reward_transaction.output[miner_wallet.address] = 9001
 
     with pytest.raises(Exception, match = 'Recompensa de mineria invalida'):

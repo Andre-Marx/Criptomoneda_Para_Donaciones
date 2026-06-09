@@ -37,10 +37,10 @@ class Blockchain:
         if len(chain) <= len(self.chain):
             raise Exception('No se puede reemplazar. La cadena entrante debe ser más larga.')
 
-        #try:
-            #Blockchain.is_valid_chain(chain)
-        #except Exception as e:
-            #raise Exception(f'No se puede reemplazar. La cadena entrante es invalida: {e}')
+        try:
+            Blockchain.is_valid_chain(chain)
+        except Exception as e:
+            raise Exception(f'No se puede reemplazar. La cadena entrante es invalida: {e}')
 
         # Se hace el reemplazo
         self.chain = chain

@@ -3,24 +3,7 @@ import time
 
 from backend.blockchain.block import Block, GENESIS_DATA
 from backend.config import MINE_RATE, SECONDS
-from backend.util.crypto_hash import crypto_hash
 from backend.util.hex_to_binary import hex_to_binary
-
-
-def mined_block_for_validation(last_block, data='prueba data'):
-    timestamp = time.time_ns()
-    last_hash = last_block.hash
-    difficulty = last_block.difficulty - 1 if last_block.difficulty > 1 else 1
-    nonce = 0
-    number = int(last_block.number) + 1
-    hash = crypto_hash(timestamp, last_hash, data, nonce, difficulty)
-
-    while hex_to_binary(hash)[0:difficulty] != '0' * difficulty:
-        nonce += 1
-        timestamp = time.time_ns()
-        hash = crypto_hash(timestamp, last_hash, data, nonce, difficulty)
-
-    return Block(timestamp, last_hash, hash, data, difficulty, nonce, number)
 
 
 def test_mine_block():
@@ -101,7 +84,7 @@ def last_block():
 
 @pytest.fixture
 def block(last_block):
-    return mined_block_for_validation(last_block)
+    return Block.mine_block(last_block, 'prueba data')
 
 def test_is_valid_block(last_block, block):
     Block.is_valid_block(last_block, block)
@@ -110,7 +93,7 @@ def test_is_valid_block_bad_last_hash(last_block, block):
     block.last_hash = 'evail_last_hash'
 
     # Para que python espere una excepción
-    with pytest.raises(Exception, match = 'El hash del bloque debe ser correcto'):
+    with pytest.raises(Exception, match = 'El "last_hash" del bloque debe ser correcto'):
         Block.is_valid_block(last_block, block)
 
 def test_is_valid_block_bad_proof_of_work(last_block, block):
