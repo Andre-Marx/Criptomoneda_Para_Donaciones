@@ -5,7 +5,7 @@ import Transaction from "./Transaction";
 
 function ToggleTransactionDisplay({block}) {
     const [displayTransaction, setDisplayTransaction] = useState(false);
-    const {data} = block;
+    const data = Array.isArray(block.data) ? block.data : [];
 
     const toggleDisplayTransaction = () => {
         setDisplayTransaction(!displayTransaction);
@@ -15,12 +15,12 @@ function ToggleTransactionDisplay({block}) {
         return (
         <div>
             {
-                data.map(transaction => (
+                data.length > 0 ? data.map(transaction => (
                     <div key={transaction.id}>
                         <hr />
                         <Transaction transaction={transaction} />
                     </div>
-                ))
+                )) : <div>Este bloque no tiene transacciones.</div>
             }
             <br />
             <Button variant="danger" size="sm" onClick={toggleDisplayTransaction}>Ver Menos</Button>
@@ -39,7 +39,7 @@ function ToggleTransactionDisplay({block}) {
 }
 
 function Block({block}) {
-    const {timestamp, hash, difficulty, last_hash, nonce, number, data} = block;
+    const {timestamp, hash, difficulty, last_hash, nonce, number} = block;
     const hashDisplay = `${hash}`;
     const timestampDisplay = new Date(timestamp / MILLISECONDS_PY).toLocaleString();
 

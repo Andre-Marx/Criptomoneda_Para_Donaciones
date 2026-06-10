@@ -1,21 +1,36 @@
 import React from "react";
 
+function formatValue(value) {
+    if (Array.isArray(value)) {
+        return value.join(', ');
+    }
+
+    if (value && typeof value === 'object') {
+        return JSON.stringify(value);
+    }
+
+    return value || '-';
+}
+
 function Transaction({transaction}) {
     const {input, output} = transaction;
-    const recipients = Object.keys(output);
-    console.log(typeof input.signature)
+    const outputEntries = Object.entries(output);
 
     return (
         <div className="Transaction">
             <div>De: {input.address}</div>
-            <div>Firma del Emisor: {input.signature}</div>
-            <div>Para: {output.recipients_address}</div>
-            <div>Monto Recibido: {output.amount_received}</div>
-            <div>Llave Pública del Receptor: {output.recipients_public_key}</div>
-            <div>Firma del Receptor: {output.recipients_signature}</div>
-            <div>Balance del Emisor: {output.sender_balance}</div>
-
-           
+            <div>Monto de Entrada: {formatValue(input.amount)}</div>
+            <div>Firma del Emisor: {formatValue(input.signature)}</div>
+            <div className="TransactionOutput">
+                <strong>Salidas:</strong>
+                {
+                    outputEntries.map(([recipient, amount]) => (
+                        <div key={recipient}>
+                            <span>{recipient}</span>: <span>{formatValue(amount)}</span>
+                        </div>
+                    ))
+                }
+            </div>
         </div>
     )
 }

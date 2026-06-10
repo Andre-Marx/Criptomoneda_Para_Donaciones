@@ -19,7 +19,9 @@ CORS(app, resources={
     r'/*': {
         'origins': [
             'http://localhost:3000',
-            'http://127.0.0.1:3000'
+            'http://127.0.0.1:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3001'
         ]
     }
 })
@@ -37,6 +39,20 @@ def get_pubsub():
         pubsub = PubSub(blockchain, transaction_pool)
 
     return pubsub
+
+
+def broadcast_block(block):
+    try:
+        get_pubsub().broadcast_block(block)
+    except Exception as e:
+        print(f'\n -- No se pudo transmitir el bloque por PubSub: {e}')
+
+
+def broadcast_transaction(transaction):
+    try:
+        get_pubsub().broadcast_transaction(transaction)
+    except Exception as e:
+        print(f'\n -- No se pudo transmitir la transacción por PubSub: {e}')
 
 @app.route('/')
 def test():
@@ -67,7 +83,7 @@ def route_blockchain_mine():
     block = blockchain.chain[-1]
 
     # Se transmite el bloque al resto de nodos
-    get_pubsub().broadcast_block(block)
+    broadcast_block(block)
 
     transaction_pool.clear_blockchain_transactions(blockchain)
 
@@ -91,8 +107,8 @@ def route_wallet_transact():
             transaction_data['amount']
         )
  
-    get_pubsub().broadcast_transaction(transaction)
     transaction_pool.set_transaction(transaction)
+    broadcast_transaction(transaction)
  
     return jsonify(transaction.to_json())
 
@@ -114,8 +130,8 @@ def route_wallet_transact_test():
             transaction_data['amount']
         )
  
-    get_pubsub().broadcast_transaction(transaction)
     transaction_pool.set_transaction(transaction)
+    broadcast_transaction(transaction)
  
     return jsonify(transaction.to_json())
 
@@ -125,11 +141,34 @@ def route_wallet_info():
 
 @app.route('/known-addresses')
 def route_knon_addresses():
-    known_addresses = set()
+    known_addresses = {wallet.address, recipient_wallet.address}
+    non_address_output_keys = {
+        'amount_received',
+        'recipients_public_key',
+        'recipients_signature',
+        'sender_balance'
+    }
+
     for block in blockchain.chain:
         for transaction in block.data:
-            known_addresses.update({list(transaction['output'])[-1]})
-    return jsonify(list(known_addresses))
+            known_addresses.add(transaction['input']['address'])
+
+            for output_key, output_value in transaction['output'].items():
+                if output_key == 'recipients_address':
+                    known_addresses.add(output_value)
+                elif output_key not in non_address_output_keys:
+                    known_addresses.add(output_key)
+
+    for transaction in transaction_pool.transaction_data():
+        known_addresses.add(transaction['input']['address'])
+
+        for output_key, output_value in transaction['output'].items():
+            if output_key == 'recipients_address':
+                known_addresses.add(output_value)
+            elif output_key not in non_address_output_keys:
+                known_addresses.add(output_key)
+
+    return jsonify(sorted(known_addresses))
 
 @app.route('/transactions')
 def route_transactions():

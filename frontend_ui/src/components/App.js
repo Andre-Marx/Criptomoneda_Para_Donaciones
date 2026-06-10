@@ -6,11 +6,27 @@ import {API_BASE_URL} from '../config';
 
 function App() {
   const [walletInfo, setWalletInfo] = useState({});
+  const [error, setError] = useState('');
+
+  const fetchWalletInfo = () => {
+    setError('');
+
+    fetch(`${API_BASE_URL}/wallet/info`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.json();
+      })
+      .then(json => setWalletInfo(json))
+      .catch(() => {
+        setError('No se pudo conectar con el backend. Ejecuta python3 -m backend.app en otra terminal.');
+      });
+  };
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/wallet/info`)
-      .then(response => response.json())
-      .then(json => setWalletInfo(json));
+    fetchWalletInfo();
   }, []);
 
   const {address, balance} = walletInfo;
@@ -25,8 +41,10 @@ function App() {
       <Link to="/transaction-pool">Grupo de Transacciones</Link>
       <br />
       <div className="WalletInfo">
+        {error && <div className="ErrorMessage">{error}</div>}
         <div>Dirección de Billetera: {address}</div>
         <div>Balance: {balance}</div>
+        <button type="button" onClick={fetchWalletInfo}>Actualizar</button>
       </div>
     </div>
   );
