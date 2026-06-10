@@ -13,6 +13,10 @@ function ConductTransaction() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const history = useHistory();
 
+    const selectedOrganization = nonprofitOrganizations.find(
+        organization => organization.address_wallet === recipient
+    );
+
     // Componente funcional que representa una tarjeta de organización
     const OrganizationCard = ({ name, area, mission, address_wallet }) => (
         <div className="organization-card">
@@ -27,7 +31,7 @@ function ConductTransaction() {
                 variant="danger"
                 onClick={() => setRecipient(address_wallet)}
             >
-                Usar dirección
+                Seleccionar
             </Button>
         </div>
     );
@@ -75,7 +79,7 @@ function ConductTransaction() {
         })
         .then(json => {
             console.log('submitTransaction json', json);
-            alert(`¡Éxito!\nSe transfirieron ${amount} hopecoins que equivalen a ${Math.round((amount*12.7) * 10 ) / 10} pesos`);
+            alert(`¡Éxito!\nSe transfirieron ${amount} CriptoCoins que equivalen a ${Math.round((amount*12.7) * 10 ) / 10} pesos`);
             history.push('/transaction-pool');
         })
         .catch(error => {
@@ -86,27 +90,45 @@ function ConductTransaction() {
     
     return (
         <div className = "ConductTransaction">
-            <Link to='/'>Inicio</Link>
-            <hr />
-            <h3>Realizar Transacción</h3>
-            <br />
+            <Link className="back-link" to='/'>Inicio</Link>
+            <section className="page-header">
+                <p className="eyebrow">CriptoCoin</p>
+                <h2>Realizar transacción</h2>
+                <p>Elige una organización simulada y envía apoyo digital desde tu billetera.</p>
+            </section>
+
             <FormGroup>
-                <FormControl type="text" placeholder="Dirección destino" value={recipient} onChange={updateRecipient} />
+                <FormControl as="select" value={recipient} onChange={updateRecipient}>
+                    <option value="">Selecciona una organización</option>
+                    {
+                        nonprofitOrganizations.map(organization => (
+                            <option key={organization.address_wallet} value={organization.address_wallet}>
+                                {organization.name} · {organization.area}
+                            </option>
+                        ))
+                    }
+                </FormControl>
             </FormGroup>
-            <br/>
+
+            {selectedOrganization && (
+                <div className="selection-summary">
+                    <span>Destino seleccionado</span>
+                    <strong>{selectedOrganization.name}</strong>
+                    <p>{selectedOrganization.address_wallet}</p>
+                </div>
+            )}
+
             <FormGroup>
                 <FormControl type="number" min="1" placeholder="Monto" value={amount} onChange={updateAmount} />
             </FormGroup>
-            <br/>
+
             <div>
                 <Button variant="danger" onClick={submitTransaction} disabled={isSubmitting}>
                     {isSubmitting ? 'Enviando...' : 'Enviar'}
                 </Button>
             </div>
             {message && <div className="ErrorMessage">{message}</div>}
-            <br />
-            <br />
-            <hr />
+
             <h2>Organizaciones sin fines de lucro</h2>
             <div className="organization-grid">
                 {nonprofitOrganizations.map((organization, index) => (
