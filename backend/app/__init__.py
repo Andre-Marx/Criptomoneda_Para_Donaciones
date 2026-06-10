@@ -31,6 +31,67 @@ recipient_wallet = Wallet(blockchain)
 transaction_pool = TransactionPool()
 pubsub = None
 
+NONPROFIT_ORGANIZATION_DATA = [
+    {
+        'name': 'Estrellas Solidarias',
+        'area': 'Educación',
+        'mission': 'Iluminar el camino de la educación para niños desfavorecidos, brindándoles acceso a recursos educativos de calidad y oportunidades para un futuro brillante.'
+    },
+    {
+        'name': 'Manos que Sanan',
+        'area': 'Salud',
+        'mission': 'Proporcionar atención médica y apoyo emocional a comunidades marginadas, promoviendo la salud integral y el bienestar.'
+    },
+    {
+        'name': 'Planeta Verde',
+        'area': 'Medio Ambiente',
+        'mission': 'Preservar y restaurar la salud del planeta mediante la promoción de prácticas sostenibles, la conservación de la biodiversidad y la conciencia ambiental.'
+    },
+    {
+        'name': 'Sonrisas para Todos',
+        'area': 'Salud Mental',
+        'mission': 'Abogar por la salud mental positiva, ofreciendo recursos y programas que fomenten el bienestar emocional y destigmatizando las enfermedades mentales.'
+    },
+    {
+        'name': 'Arte Inclusivo',
+        'area': 'Cultura y Arte',
+        'mission': 'Facilitar el acceso a las artes para todas las comunidades, promoviendo la inclusión y la diversidad a través de programas artísticos y culturales.'
+    },
+    {
+        'name': 'Hogar Esperanza',
+        'area': 'Vivienda',
+        'mission': 'Combatir la falta de vivienda proporcionando refugio, asistencia y recursos para ayudar a las personas a recuperar la estabilidad en sus vidas.'
+    },
+    {
+        'name': 'Alas de Solidaridad',
+        'area': 'Desarrollo Comunitario',
+        'mission': 'Empoderar a comunidades marginadas mediante la implementación de proyectos de desarrollo sostenible que promuevan la autosuficiencia y la igualdad.'
+    },
+    {
+        'name': 'Sabores del Cambio',
+        'area': 'Seguridad Alimentaria',
+        'mission': 'Luchar contra la hambruna y la malnutrición, brindando acceso a alimentos nutritivos y educación sobre prácticas agrícolas sostenibles.'
+    },
+    {
+        'name': 'Notas de Esperanza',
+        'area': 'Educación Musical',
+        'mission': 'Facilitar el acceso a la educación musical para niños y jóvenes, fomentando la expresión creativa y el desarrollo de habilidades a través de la música.'
+    },
+    {
+        'name': 'Construyendo Puentes',
+        'area': 'Derechos Humanos',
+        'mission': 'Defender y promover los derechos humanos, construyendo puentes de comprensión y tolerancia a través de la educación, la sensibilización y la promoción de la justicia social.'
+    }
+]
+
+nonprofit_organizations = [
+    {
+        **organization,
+        'address_wallet': Wallet(blockchain).address
+    }
+    for organization in NONPROFIT_ORGANIZATION_DATA
+]
+
 
 def get_pubsub():
     global pubsub
@@ -139,9 +200,17 @@ def route_wallet_transact_test():
 def route_wallet_info():
     return jsonify({'address': wallet.address, 'balance':wallet.balance})
 
+@app.route('/nonprofit-organizations')
+def route_nonprofit_organizations():
+    return jsonify(nonprofit_organizations)
+
 @app.route('/known-addresses')
 def route_knon_addresses():
-    known_addresses = {wallet.address, recipient_wallet.address}
+    known_addresses = {
+        wallet.address,
+        recipient_wallet.address,
+        *map(lambda organization: organization['address_wallet'], nonprofit_organizations)
+    }
     non_address_output_keys = {
         'amount_received',
         'recipients_public_key',
@@ -151,21 +220,29 @@ def route_knon_addresses():
 
     for block in blockchain.chain:
         for transaction in block.data:
-            known_addresses.add(transaction['input']['address'])
+            if transaction['input']['address'] != '*--recompensa-oficial-de-mineria--*':
+                known_addresses.add(transaction['input']['address'])
 
             for output_key, output_value in transaction['output'].items():
                 if output_key == 'recipients_address':
                     known_addresses.add(output_value)
-                elif output_key not in non_address_output_keys:
+                elif (
+                    output_key not in non_address_output_keys
+                    and output_key != '*--recompensa-oficial-de-mineria--*'
+                ):
                     known_addresses.add(output_key)
 
     for transaction in transaction_pool.transaction_data():
-        known_addresses.add(transaction['input']['address'])
+        if transaction['input']['address'] != '*--recompensa-oficial-de-mineria--*':
+            known_addresses.add(transaction['input']['address'])
 
         for output_key, output_value in transaction['output'].items():
             if output_key == 'recipients_address':
                 known_addresses.add(output_value)
-            elif output_key not in non_address_output_keys:
+            elif (
+                output_key not in non_address_output_keys
+                and output_key != '*--recompensa-oficial-de-mineria--*'
+            ):
                 known_addresses.add(output_key)
 
     return jsonify(sorted(known_addresses))
@@ -203,13 +280,17 @@ def sync_with_root_node():
 
 def seed_data():
     for i in range(10):
+        first_organization = nonprofit_organizations[i % len(nonprofit_organizations)]
+        second_organization = nonprofit_organizations[(i + 1) % len(nonprofit_organizations)]
+
         blockchain.add_block([
-            Transaction(Wallet(blockchain), Wallet(blockchain), random.randint(2,50)).to_json(),
-            Transaction(Wallet(blockchain), Wallet(blockchain), random.randint(2,50)).to_json()
+            Transaction(Wallet(blockchain), first_organization['address_wallet'], random.randint(2,50)).to_json(),
+            Transaction(Wallet(blockchain), second_organization['address_wallet'], random.randint(2,50)).to_json()
         ])
 
     for i in range(3):
-        transaction_pool.set_transaction(Transaction(Wallet(blockchain), Wallet(blockchain), random.randint(2,50)))
+        organization = nonprofit_organizations[i % len(nonprofit_organizations)]
+        transaction_pool.set_transaction(Transaction(Wallet(blockchain), organization['address_wallet'], random.randint(2,50)))
 
 
 def main():
