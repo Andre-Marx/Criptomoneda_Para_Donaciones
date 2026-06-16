@@ -700,6 +700,79 @@ h1 {
   min-width: 0;
 }
 
+.network-mining-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.network-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 250, 241, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.network-card span,
+.miners-strip span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.network-card strong {
+  color: var(--anahuac-wine);
+  font-size: 18px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.network-card small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.network-card code,
+.miners-strip code {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.miners-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.miners-strip div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(121, 0, 31, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.miners-strip strong {
+  color: var(--anahuac-wine);
+}
+
+.pool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .pagination-bar {
   display: flex;
   flex-wrap: wrap;
@@ -768,7 +841,8 @@ hr {
   .dashboard-grid,
   .action-panel,
   .chain-overview,
-  .transaction-balance-strip {
+  .transaction-balance-strip,
+  .network-mining-panel {
     grid-template-columns: 1fr;
   }
 

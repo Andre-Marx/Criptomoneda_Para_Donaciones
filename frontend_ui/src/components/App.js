@@ -37,7 +37,7 @@ function App() {
         setPendingTransactions(transactionsJson);
       })
       .catch(() => {
-        setError('No se pudo conectar con el backend. Ejecuta python3 -m backend.app en otra terminal.');
+        setError(`No se pudo conectar con el backend en ${API_BASE_URL}. Verifica que el backend esté corriendo y que esa IP sea accesible desde este navegador.`);
       });
   };
 
