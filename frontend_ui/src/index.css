@@ -2,16 +2,19 @@
   --anahuac-orange: #f68b1f;
   --anahuac-gold: #ffb21a;
   --anahuac-wine: #79001f;
-  --anahuac-wine-light: #b20b34;
-  --bg: #12070b;
-  --surface: #1b0b11;
-  --surface-2: #241017;
-  --line: rgba(255, 178, 26, 0.24);
-  --text: #fff8ee;
-  --muted: #d9bfb2;
-  --danger: #ffb8b8;
-  --success: #ffe0a6;
-  --shadow: 0 22px 54px rgba(0, 0, 0, 0.42);
+  --anahuac-wine-light: #a20a32;
+  --bone: #f7efe1;
+  --paper: #fffaf1;
+  --paper-strong: #ffffff;
+  --sand: #eadfcb;
+  --ink: #2b1812;
+  --muted: #765f53;
+  --line: rgba(121, 0, 31, 0.16);
+  --line-strong: rgba(121, 0, 31, 0.28);
+  --danger: #79001f;
+  --success: #6d4a00;
+  --shadow: 0 22px 52px rgba(80, 42, 16, 0.12);
+  --shadow-soft: 0 12px 28px rgba(80, 42, 16, 0.1);
 }
 
 * {
@@ -22,10 +25,10 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    linear-gradient(115deg, rgba(121, 0, 31, 0.28), transparent 34%),
-    linear-gradient(245deg, rgba(246, 139, 31, 0.18), transparent 38%),
-    var(--bg);
-  color: var(--text);
+    radial-gradient(circle at top left, rgba(255, 178, 26, 0.26), transparent 34%),
+    linear-gradient(135deg, rgba(255, 250, 241, 0.94), rgba(247, 239, 225, 0.98)),
+    var(--bone);
+  color: var(--ink);
   font-family: Inter, Quicksand, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 16px;
   letter-spacing: 0;
@@ -39,10 +42,10 @@ body::before {
   pointer-events: none;
   content: "";
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent 78%);
+    linear-gradient(rgba(121, 0, 31, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(246, 139, 31, 0.05) 1px, transparent 1px);
+  background-size: 58px 58px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.86), transparent 78%);
 }
 
 a {
@@ -51,13 +54,13 @@ a {
 }
 
 a:hover {
-  color: var(--anahuac-gold);
+  color: var(--anahuac-wine);
 }
 
 button,
 .btn {
   min-height: 42px;
-  border: 1px solid rgba(246, 139, 31, 0.45);
+  border: 1px solid rgba(121, 0, 31, 0.2);
   border-radius: 8px;
   padding: 9px 16px;
   background: linear-gradient(135deg, var(--anahuac-orange), var(--anahuac-wine-light));
@@ -65,6 +68,15 @@ button,
   cursor: pointer;
   font-weight: 800;
   letter-spacing: 0;
+  box-shadow: 0 10px 22px rgba(121, 0, 31, 0.15);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+button:not(:disabled):hover,
+.btn:not(:disabled):hover {
+  border-color: rgba(121, 0, 31, 0.44);
+  box-shadow: 0 14px 28px rgba(121, 0, 31, 0.18);
+  transform: translateY(-1px);
 }
 
 button:disabled,
@@ -79,23 +91,25 @@ button:disabled,
   align-items: center;
   justify-content: center;
   min-height: 42px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   padding: 9px 16px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-  font-weight: 800;
+  background: rgba(255, 250, 241, 0.86);
+  color: var(--anahuac-wine);
+  font-weight: 900;
+  box-shadow: var(--shadow-soft);
 }
 
 .form-control {
   width: min(680px, 100%);
-  min-height: 46px;
-  border: 1px solid var(--line);
+  min-height: 48px;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1f090f;
+  background: var(--paper-strong);
+  color: var(--ink);
   outline: none;
+  box-shadow: 0 8px 18px rgba(80, 42, 16, 0.06);
 }
 
 .form-control:focus {
@@ -108,6 +122,12 @@ h2,
 h3,
 p {
   margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--anahuac-wine);
 }
 
 .dashboard-shell {
@@ -133,14 +153,14 @@ p {
 }
 
 .logo {
-  width: clamp(82px, 12vw, 132px);
-  height: clamp(82px, 12vw, 132px);
-  filter: drop-shadow(0 18px 36px rgba(246, 139, 31, 0.2));
+  width: clamp(88px, 12vw, 138px);
+  height: clamp(88px, 12vw, 138px);
+  filter: drop-shadow(0 18px 30px rgba(121, 0, 31, 0.12));
 }
 
 .eyebrow {
   margin-bottom: 8px;
-  color: var(--anahuac-gold);
+  color: var(--anahuac-orange);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0;
@@ -148,7 +168,8 @@ p {
 }
 
 h1 {
-  font-size: clamp(42px, 7vw, 84px);
+  color: var(--anahuac-wine);
+  font-size: clamp(46px, 7vw, 88px);
   line-height: 0.95;
   letter-spacing: 0;
 }
@@ -169,15 +190,14 @@ h1 {
 
 .wallet-panel,
 .action-panel,
-.Block,
 .Transaction,
 .organization-card,
 .selection-summary {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(27, 11, 17, 0.82);
+  background: rgba(255, 250, 241, 0.92);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(12px);
 }
 
 .wallet-panel {
@@ -195,7 +215,10 @@ h1 {
 
 .panel-heading span,
 .metric-row span,
-.selection-summary span {
+.selection-summary span,
+.chain-overview span,
+.header-field span,
+.detail-heading span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 900;
@@ -203,18 +226,18 @@ h1 {
 }
 
 .panel-heading strong {
-  color: var(--anahuac-gold);
+  color: var(--anahuac-wine);
   font-size: 42px;
   line-height: 1;
 }
 
 .wallet-address {
   min-height: 68px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(121, 0, 31, 0.12);
   border-radius: 8px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -227,16 +250,16 @@ h1 {
 }
 
 .metric-row div {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(121, 0, 31, 0.12);
   border-radius: 8px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .metric-row strong {
   display: block;
   margin-top: 8px;
-  color: #fff;
+  color: var(--anahuac-wine);
   font-size: 30px;
 }
 
@@ -251,26 +274,27 @@ h1 {
   display: grid;
   align-content: space-between;
   min-height: 210px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(121, 0, 31, 0.13);
   border-radius: 8px;
   padding: 18px;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
   text-align: left;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .action-card:hover {
   border-color: rgba(246, 139, 31, 0.75);
-  background: rgba(246, 139, 31, 0.09);
-  color: var(--text);
+  background: rgba(255, 246, 229, 0.95);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
   transform: translateY(-2px);
 }
 
 .action-button {
   width: 100%;
   height: 100%;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.62);
   font: inherit;
 }
 
@@ -279,14 +303,16 @@ h1 {
   place-items: center;
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(246, 139, 31, 0.4);
+  border: 1px solid rgba(246, 139, 31, 0.5);
   border-radius: 8px;
-  color: var(--anahuac-gold);
+  background: rgba(246, 139, 31, 0.1);
+  color: var(--anahuac-wine);
   font-size: 20px;
 }
 
 .action-card strong {
   margin-top: 28px;
+  color: var(--anahuac-wine);
   font-size: 20px;
 }
 
@@ -304,6 +330,26 @@ h1 {
   padding: 28px 0 46px;
 }
 
+.mini-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px 6px 7px;
+  background: rgba(255, 250, 241, 0.86);
+  color: var(--anahuac-wine);
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: var(--shadow-soft);
+}
+
+.mini-brand img {
+  width: 34px;
+  height: 34px;
+}
+
 .page-header {
   display: grid;
   gap: 10px;
@@ -311,16 +357,22 @@ h1 {
   text-align: left;
 }
 
+.blockchain-page-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
 .page-header h2,
 .ConductTransaction > h2,
-.Blockchain h3,
 .TransactionPool h3 {
+  color: var(--anahuac-wine);
   font-size: clamp(30px, 4vw, 52px);
   letter-spacing: 0;
 }
 
 .page-header p {
   color: var(--muted);
+  line-height: 1.45;
 }
 
 .ConductTransaction .form-group {
@@ -358,7 +410,7 @@ h1 {
 }
 
 .organization-card h3 {
-  color: var(--anahuac-gold);
+  color: var(--anahuac-wine);
 }
 
 .organization-card p {
@@ -367,17 +419,189 @@ h1 {
 }
 
 .organization-card strong {
-  color: var(--text);
+  color: var(--ink);
 }
 
-.Block {
+.chain-overview {
   display: grid;
-  gap: 10px;
-  margin: 16px 0;
-  padding: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 22px;
+}
+
+.chain-overview div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(255, 250, 241, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.chain-overview strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--anahuac-wine);
+  font-size: 24px;
+}
+
+.blockchain-timeline {
+  display: grid;
+  gap: 0;
+  margin-top: 12px;
+}
+
+.chain-block {
+  position: relative;
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  min-height: 120px;
+}
+
+.chain-rail {
+  position: relative;
+}
+
+.chain-rail::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 22px;
+  width: 3px;
+  content: "";
+  background: linear-gradient(to bottom, var(--anahuac-orange), var(--anahuac-wine));
+  border-radius: 999px;
+}
+
+.chain-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-top: 18px;
+  border: 4px solid var(--bone);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--anahuac-orange), var(--anahuac-wine));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(121, 0, 31, 0.18);
+}
+
+.block-card {
+  min-width: 0;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 241, 0.94);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.block-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 88px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 18px;
+  background: linear-gradient(90deg, rgba(246, 139, 31, 0.15), rgba(255, 250, 241, 0.72));
+  color: var(--ink);
   text-align: left;
+  box-shadow: none;
+}
+
+.block-summary:hover {
+  background: linear-gradient(90deg, rgba(246, 139, 31, 0.22), rgba(255, 250, 241, 0.9));
+  box-shadow: none;
+}
+
+.block-summary > span:first-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.block-summary strong {
+  color: var(--anahuac-wine);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.block-summary small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.block-kicker {
+  color: var(--anahuac-orange);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.expand-indicator {
+  flex: 0 0 auto;
+  border: 1px solid rgba(121, 0, 31, 0.2);
+  border-radius: 8px;
+  padding: 8px 11px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--anahuac-wine);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.block-header-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  padding: 16px;
+}
+
+.header-field {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 82px;
+  border: 1px solid rgba(121, 0, 31, 0.11);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.header-field code,
+.header-field strong {
+  color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 13px;
+  line-height: 1.35;
+}
+
+.block-details {
+  border-top: 1px solid var(--line);
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.detail-heading strong {
+  color: var(--anahuac-wine);
+}
+
+.block-transaction {
+  margin-top: 12px;
 }
 
 .Transaction {
@@ -389,6 +613,12 @@ h1 {
   font-size: 14px;
 }
 
+.block-transaction .Transaction,
+.transaction-list-item .Transaction {
+  margin: 0;
+  box-shadow: none;
+}
+
 .TransactionOutput {
   margin-top: 10px;
 }
@@ -396,6 +626,47 @@ h1 {
 .TransactionOutput div {
   margin-top: 6px;
   color: var(--muted);
+}
+
+.transaction-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.transaction-list-item {
+  min-width: 0;
+}
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.pagination-button {
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+  background: rgba(255, 250, 241, 0.9);
+  color: var(--anahuac-wine);
+  box-shadow: var(--shadow-soft);
+}
+
+.pagination-button.is-active {
+  background: var(--anahuac-wine);
+  color: #fff;
+}
+
+.empty-state {
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--muted);
+  text-align: left;
 }
 
 .ErrorMessage,
@@ -408,13 +679,13 @@ h1 {
 }
 
 .ErrorMessage {
-  border: 1px solid rgba(255, 184, 184, 0.4);
-  background: rgba(121, 0, 31, 0.32);
+  border: 1px solid rgba(121, 0, 31, 0.26);
+  background: rgba(121, 0, 31, 0.08);
   color: var(--danger);
 }
 
 .StatusMessage {
-  border: 1px solid rgba(255, 178, 26, 0.34);
+  border: 1px solid rgba(246, 139, 31, 0.34);
   background: rgba(246, 139, 31, 0.12);
   color: var(--success);
 }
@@ -433,8 +704,14 @@ hr {
   }
 
   .dashboard-grid,
-  .action-panel {
+  .action-panel,
+  .chain-overview {
     grid-template-columns: 1fr;
+  }
+
+  .blockchain-page-header {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 
   .action-card {
@@ -461,7 +738,39 @@ hr {
   }
 
   .logo {
-    width: 88px;
-    height: 88px;
+    width: 92px;
+    height: 92px;
+  }
+
+  .mini-brand span {
+    display: none;
+  }
+
+  .mini-brand {
+    padding: 6px;
+  }
+
+  .chain-block {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .chain-rail::before {
+    left: 18px;
+  }
+
+  .chain-node {
+    width: 38px;
+    height: 38px;
+    border-width: 3px;
+    font-size: 11px;
+  }
+
+  .block-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .block-header-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,6 +1,6 @@
 import React, {useState, useEffect} from "react";
 import { Link } from "react-router-dom";
-import logo from '../assets/criptocoin-logo.svg';
+import logo from '../assets/hopecoin-logo.svg';
 import {API_BASE_URL} from '../config';
 
 
@@ -72,10 +72,10 @@ function App() {
     <div className="App dashboard-shell">
       <header className="dashboard-header">
         <div className="brand-lockup">
-          <img className="logo" src={logo} alt="CriptoCoin" />
+          <img className="logo" src={logo} alt="HopeCoin" />
           <div>
             <p className="eyebrow">Cripto-donaciones</p>
-            <h1>CriptoCoin</h1>
+            <h1>HopeCoin</h1>
             <p className="slogan">La evolución digital del apoyo humano</p>
           </div>
         </div>
@@ -116,7 +116,7 @@ function App() {
           <Link className="action-card" to="/conduct-transaction">
             <span className="action-icon">◇</span>
             <strong>Realizar transacción</strong>
-            <small>Selecciona una organización simulada y envía CriptoCoins.</small>
+            <small>Selecciona una organización simulada y envía HopeCoins.</small>
           </Link>
 
           <button className="action-card action-button" type="button" onClick={mineTransactions} disabled={isMining}>

@@ -1,8 +1,9 @@
 import React, {useState, useEffect} from "react";
-import {Link, useHistory} from 'react-router-dom';
+import {useHistory} from 'react-router-dom';
 import { Button } from "react-bootstrap";
 import Transaction from './Transaction';
 import { API_BASE_URL, SECONDS_JS} from "../config";
+import BrandHomeLink from './BrandHomeLink';
 
 const POLL_INTERVAL = 10 * SECONDS_JS;
 
@@ -62,21 +63,25 @@ function TransactionPool() {
 
     return (
         <div className="TransactionPool">
-            <Link to="/">Inicio</Link>
-            <hr />
-            <h3>Grupo de Transacciones</h3>
+            <BrandHomeLink />
+            <section className="page-header">
+                <p className="eyebrow">HopeCoin</p>
+                <h2>Grupo de transacciones</h2>
+                <p>Transacciones pendientes antes de consolidarse en el siguiente bloque.</p>
+            </section>
             {message && <div className="ErrorMessage">{message}</div>}
-            <div>
+            <div className="transaction-list">
                 {
                     transactions.map(transaction => (
-                        <div key={transaction.id}>
-                            <hr />
+                        <div className="transaction-list-item" key={transaction.id}>
                             <Transaction transaction={transaction} />
                         </div>
                     ))
                 }
+                {transactions.length === 0 && (
+                    <div className="empty-state">No hay transacciones pendientes.</div>
+                )}
             </div>
-            <hr />
             <Button
                 variant="danger"
                 onClick={fetchMineBlock}

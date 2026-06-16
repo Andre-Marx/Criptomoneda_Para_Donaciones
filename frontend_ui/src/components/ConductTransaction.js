@@ -1,7 +1,8 @@
 import React, {useState, useEffect} from "react";
-import { Link, useHistory } from 'react-router-dom'; 
+import { useHistory } from 'react-router-dom'; 
 import {FormGroup, FormControl, Button} from 'react-bootstrap';
 import { API_BASE_URL } from "../config";
+import BrandHomeLink from './BrandHomeLink';
 
 
 
@@ -79,7 +80,7 @@ function ConductTransaction() {
         })
         .then(json => {
             console.log('submitTransaction json', json);
-            alert(`¡Éxito!\nSe transfirieron ${amount} CriptoCoins que equivalen a ${Math.round((amount*12.7) * 10 ) / 10} pesos`);
+            alert(`¡Éxito!\nSe transfirieron ${amount} HopeCoins que equivalen a ${Math.round((amount*12.7) * 10 ) / 10} pesos`);
             history.push('/transaction-pool');
         })
         .catch(error => {
@@ -90,9 +91,9 @@ function ConductTransaction() {
     
     return (
         <div className = "ConductTransaction">
-            <Link className="back-link" to='/'>Inicio</Link>
+            <BrandHomeLink />
             <section className="page-header">
-                <p className="eyebrow">CriptoCoin</p>
+                <p className="eyebrow">HopeCoin</p>
                 <h2>Realizar transacción</h2>
                 <p>Elige una organización simulada y envía apoyo digital desde tu billetera.</p>
             </section>
