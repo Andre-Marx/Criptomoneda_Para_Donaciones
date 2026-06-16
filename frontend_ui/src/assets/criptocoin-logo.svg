@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="96" fill="#120409"/>
+  <path d="M255.8 143.3C230.1 103 170.8 94.2 135.1 129.9C98.9 166.1 101.1 224 139.6 260.1L255.8 369.2L372.1 260.1C410.5 224 412.7 166.1 376.5 129.9C340.8 94.2 281.5 103 255.8 143.3Z" stroke="url(#heartGradient)" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M185 307.8L231.4 351.4C244.8 363.9 266.8 363.9 280.2 351.4L326.6 307.8" stroke="#FF9A12" stroke-width="18" stroke-linecap="round"/>
+  <path d="M205.5 329.5L244.6 366.2C251.1 372.3 260.5 372.3 267 366.2L306.1 329.5" stroke="#7B001E" stroke-width="18" stroke-linecap="round"/>
+  <path d="M292.5 207.7C282.9 194 267.2 185 249.3 185C220.2 185 196.6 208.6 196.6 237.7C196.6 266.8 220.2 290.4 249.3 290.4C267.2 290.4 282.9 281.5 292.5 267.8" stroke="#FF9A12" stroke-width="26" stroke-linecap="round"/>
+  <path d="M345.8 207.7C336.2 194 320.5 185 302.6 185C273.5 185 249.9 208.6 249.9 237.7C249.9 266.8 273.5 290.4 302.6 290.4C320.5 290.4 336.2 281.5 345.8 267.8" stroke="#7B001E" stroke-width="26" stroke-linecap="round"/>
+  <path d="M166 405H346" stroke="#FF9A12" stroke-width="10" stroke-linecap="round"/>
+  <path d="M196 430H316" stroke="#7B001E" stroke-width="10" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="heartGradient" x1="98" y1="102" x2="414" y2="368" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB31A"/>
+      <stop offset="0.45" stop-color="#FF8A00"/>
+      <stop offset="1" stop-color="#7B001E"/>
+    </linearGradient>
+  </defs>
+</svg>

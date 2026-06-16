@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hope-outline" x1="100" y1="104" x2="412" y2="424" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB21A"/>
+      <stop offset="0.42" stop-color="#F68B1F"/>
+      <stop offset="1" stop-color="#79001F"/>
+    </linearGradient>
+    <linearGradient id="hope-hand" x1="156" y1="310" x2="356" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F68B1F"/>
+      <stop offset="1" stop-color="#79001F"/>
+    </linearGradient>
+  </defs>
+  <path d="M256 139.6C228.4 96.4 164.7 86.9 126.4 125.2C87.5 164.1 89.9 226.3 131.2 265.1L256 382.2L380.8 265.1C422.1 226.3 424.5 164.1 385.6 125.2C347.3 86.9 283.6 96.4 256 139.6Z" fill="#FFF9EE" stroke="url(#hope-outline)" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M165 322L221.4 375C240.5 393 271.5 393 290.6 375L347 322" stroke="url(#hope-hand)" stroke-width="18" stroke-linecap="round"/>
+  <path d="M187 349L235 394.2C247.1 405.5 264.9 405.5 277 394.2L325 349" stroke="url(#hope-hand)" stroke-width="18" stroke-linecap="round"/>
+  <path d="M209 376L242.8 407.8C250.2 414.7 261.8 414.7 269.2 407.8L303 376" stroke="url(#hope-hand)" stroke-width="18" stroke-linecap="round"/>
+  <path d="M189 214V306M189 260H274M274 214V306" stroke="#79001F" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M356 233C345.9 221.7 331.3 214.6 315 214.6C284.4 214.6 259.6 239.4 259.6 270C259.6 300.6 284.4 325.4 315 325.4C331.3 325.4 345.9 318.3 356 307" stroke="#79001F" stroke-width="28" stroke-linecap="round"/>
+  <path d="M356 233C346.9 222.8 333.8 216.1 319 214.9" stroke="#F68B1F" stroke-width="12" stroke-linecap="round"/>
+  <path d="M319 325.1C333.8 323.9 346.9 317.2 356 307" stroke="#F68B1F" stroke-width="12" stroke-linecap="round"/>
+</svg>

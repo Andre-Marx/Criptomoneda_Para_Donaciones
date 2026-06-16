@@ -37,10 +37,10 @@ class Blockchain:
         if len(chain) <= len(self.chain):
             raise Exception('No se puede reemplazar. La cadena entrante debe ser más larga.')
 
-        #try:
-            #Blockchain.is_valid_chain(chain)
-        #except Exception as e:
-            #raise Exception(f'No se puede reemplazar. La cadena entrante es invalida: {e}')
+        try:
+            Blockchain.is_valid_chain(chain)
+        except Exception as e:
+            raise Exception(f'No se puede reemplazar. La cadena entrante es invalida: {e}')
 
         # Se hace el reemplazo
         self.chain = chain
@@ -89,6 +89,7 @@ class Blockchain:
             - Cada transacción debe ser válida
         """
         transaction_ids = set()
+        address_balances = {}
 
         for i in range(len(chain)):
             block = chain[i]
@@ -106,17 +107,40 @@ class Blockchain:
                     if has_mining_reward:
                         raise Exception(f'Sólo puede haber una recompensa de minería por bloque. \n Revisar el bloque con hash: {block.hash}')
                     has_mining_reward = True
+                    Transaction.is_valid_transaction(transaction)
+
+                    for recipient, amount in transaction.output.items():
+                        if recipient not in address_balances:
+                            historic_blockchain = Blockchain()
+                            historic_blockchain.chain = chain[0:i]
+                            address_balances[recipient] = Wallet.calculate_balance(historic_blockchain, recipient)
+
+                        address_balances[recipient] += amount
 
                 else:
+                    sender_address = transaction.input['address']
 
-                    historic_blockchain = Blockchain()
-                    historic_blockchain.chain = chain[0:i]
-                    historic_balance = Wallet.calculate_balance(historic_blockchain, transaction.input['address'])
+                    if sender_address not in address_balances:
+                        historic_blockchain = Blockchain()
+                        historic_blockchain.chain = chain[0:i]
+                        address_balances[sender_address] = Wallet.calculate_balance(historic_blockchain, sender_address)
 
-                    if historic_balance != transaction.input['amount']:
+                    if address_balances[sender_address] != transaction.input['amount']:
                         raise Exception(f'Transacción {transaction.id} tiene un monto inválido como input')
 
-                Transaction.is_valid_transaction(transaction)
+                    Transaction.is_valid_transaction(transaction)
+
+                    for recipient, amount in transaction.output.items():
+                        if recipient == sender_address:
+                            address_balances[recipient] = amount
+                            continue
+
+                        if recipient not in address_balances:
+                            historic_blockchain = Blockchain()
+                            historic_blockchain.chain = chain[0:i]
+                            address_balances[recipient] = Wallet.calculate_balance(historic_blockchain, recipient)
+
+                        address_balances[recipient] += amount
 
 # Se crea la clase main para ayudarnos al momento de debuggear
 def main():

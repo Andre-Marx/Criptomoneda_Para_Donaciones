@@ -2,53 +2,93 @@ import time
 import uuid
 
 from backend.wallet.wallet import Wallet
-from backend.config import MINING_REWARD, ADDRESS_REWARD
+from backend.config import MINING_REWARD, MINING_REWARD_INPUT
 
 class Transaction:
     """
     Documento de un cambio de moneda de un remitente a uno o más destinatarios.
     """
-    def __init__(self, sender_wallet = None, recipient = None, amount = None, id = None, output = None, input = None):
+    def __init__(
+        self,
+        sender_wallet = None,
+        recipient = None,
+        amount = None,
+        id = None,
+        output = None,
+        input = None,
+        signatures = None,
+        sender_balance = None
+    ):
         self.id = id or str(uuid.uuid4())[:8]
-        self.output = output or self.create_output(sender_wallet, recipient, amount)
-        self.input = input or self.create_input(sender_wallet, self.output)
+        self.output = output or self.create_output(sender_wallet, recipient, amount, sender_balance)
+        self.input = input or self.create_input(sender_wallet, self.output, sender_balance)
+        self.signatures = signatures or self.create_signatures(
+            sender_wallet,
+            recipient,
+            amount,
+            self.input.get('signature') if self.input else None
+        )
 
-    def create_output(self, sender_wallet, recipient, amount):
+    def create_output(self, sender_wallet, recipient, amount, sender_balance = None):
         """
         Estructura de los datos de salida de una transacción.
         """
-        if amount >  sender_wallet.balance:
+        balance = sender_balance if sender_balance is not None else sender_wallet.balance
+        recipient_address = recipient.address if isinstance(recipient, Wallet) else recipient
+
+        if amount > balance:
             raise Exception('El monto es mayor al balance')
 
-        output = {}
+        return {
+            recipient_address: amount,
+            sender_wallet.address: balance - amount
+        }
 
-        if isinstance(recipient,  Wallet):
-            output['recipients_address'] = recipient.address
-            output['amount_received'] = amount
-            output['recipients_signature'] = recipient.sign({'sender_address': sender_wallet.address, 'amount':amount})
-            output['recipients_public_key'] = recipient.public_key
-            output['sender_balance'] = sender_wallet.balance - amount
-            output[sender_wallet.address] = sender_wallet.balance - amount
-        else:
-            output[recipient] = amount
-            output[sender_wallet.address] = sender_wallet.balance - amount
-
-        
-
-        return output
-
-    def create_input(self, sender_wallet, output):
+    def create_input(self, sender_wallet, output, sender_balance = None):
         """
         Estructura de los datos de entrada de la transacción.
         Firma de la transacción y la dirección y llave pública del enviador.
         """
+        balance = sender_balance if sender_balance is not None else sender_wallet.balance
 
         return {
             'timestamp': time.time_ns(),
-            'amount': sender_wallet.balance,
+            'amount': balance,
             'address': sender_wallet.address,
             'public_key':sender_wallet.public_key,
             'signature': sender_wallet.sign(output)
+        }
+
+    def create_signatures(self, sender_wallet, recipient, amount, sender_signature):
+        """
+        Guarda las firmas digitales que acompañan la transacción.
+        """
+        if not sender_wallet:
+            return {}
+
+        recipient_address = recipient.address if isinstance(recipient, Wallet) else recipient
+        recipient_public_key = recipient.public_key if isinstance(recipient, Wallet) else None
+        recipient_signature = None
+
+        if isinstance(recipient, Wallet):
+            recipient_signature = recipient.sign({
+                'transaction_id': self.id,
+                'sender_address': sender_wallet.address,
+                'recipient_address': recipient_address,
+                'amount': amount
+            })
+
+        return {
+            'sender': {
+                'address': sender_wallet.address,
+                'public_key': sender_wallet.public_key,
+                'signature': sender_signature
+            },
+            'recipient': {
+                'address': recipient_address,
+                'public_key': recipient_public_key,
+                'signature': recipient_signature
+            }
         }
     
     def update(self, sender_wallet, recipient, amount):
@@ -56,17 +96,25 @@ class Transaction:
         Actualiza la transacción con un existente o nuevo destinatario.
         """
 
+        recipient_address = recipient.address if isinstance(recipient, Wallet) else recipient
+
         if amount > self.output[sender_wallet.address]:
             raise Exception('El monto es mayor al balance')
 
-        if recipient in self.output:
-            self.output[recipient] = self.output[recipient] + amount
+        if recipient_address in self.output:
+            self.output[recipient_address] = self.output[recipient_address] + amount
         else:
-            self.output[recipient] = amount
+            self.output[recipient_address] = amount
 
         self.output[sender_wallet.address] = self.output[sender_wallet.address] - amount
 
-        self.input = self.create_input(sender_wallet, self.output)
+        self.input = self.create_input(sender_wallet, self.output, self.input['amount'])
+        self.signatures = self.create_signatures(
+            sender_wallet,
+            recipient,
+            amount,
+            self.input['signature']
+        )
 
     def to_json(self):
         """
@@ -106,23 +154,10 @@ class Transaction:
         """
         Genera la recompensa por minar una transaccion
         """
-        output = {}
-        output[miner_wallet.address] = MINING_REWARD 
-
-        return Transaction(input= {
-            'timestamp': time.time_ns(),
-            'amount': '',
-            'address': ADDRESS_REWARD,
-            'public_key': '',
-            'signature': ''
-        }, output = {
-            'recipients_address': miner_wallet.address,
-            'amount_received': MINING_REWARD,
-            'recipients_signature': 'AUTO',
-            'recipients_public_key': miner_wallet.public_key,
-            'sender_balance': '',
-            miner_wallet.address: MINING_REWARD
-        })
+        return Transaction(
+            input=MINING_REWARD_INPUT,
+            output={miner_wallet.address: MINING_REWARD}
+        )
 
 
 

@@ -28,3 +28,23 @@ def test_clear_blockchain_transactions():
 
     assert not transaction_1.id in transaction_pool.transaction_map
     assert not transaction_2.id in transaction_pool.transaction_map
+
+def test_available_balance_accounts_for_pending_transactions():
+    transaction_pool = TransactionPool()
+    blockchain = Blockchain()
+    wallet = Wallet(blockchain)
+
+    transaction_1 = Transaction(wallet, 'recipient', 100)
+    transaction_pool.set_transaction(transaction_1)
+
+    assert transaction_pool.available_balance(blockchain, wallet.address) == wallet.balance - 100
+
+    transaction_2 = Transaction(
+        wallet,
+        'recipient_2',
+        200,
+        sender_balance=transaction_pool.available_balance(blockchain, wallet.address)
+    )
+    transaction_pool.set_transaction(transaction_2)
+
+    assert transaction_pool.available_balance(blockchain, wallet.address) == wallet.balance - 300

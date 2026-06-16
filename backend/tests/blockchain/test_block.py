@@ -5,6 +5,7 @@ from backend.blockchain.block import Block, GENESIS_DATA
 from backend.config import MINE_RATE, SECONDS
 from backend.util.hex_to_binary import hex_to_binary
 
+
 def test_mine_block():
     '''
     Prueba que funcione el método de minado.
@@ -38,7 +39,7 @@ def test_genesis():
 
     # Verifica que los argumentos del genesis sean los declaradis originalmente
     for key, value in GENESIS_DATA.items():
-        getattr(genesis, key) == value
+        assert getattr(genesis, key) == value
 
 
 def test_quickly_mined_block():
@@ -66,7 +67,8 @@ def test_mined_block_difficulty_limits_at_1():
         'test_hash',
         'test_data',
         1,
-        0
+        0,
+        1
     )
 
     time.sleep(MINE_RATE / SECONDS)

@@ -120,8 +120,8 @@ class Block:
             - La dificultad debe ajustarse sólo por 1 valor (más o menos)
             - El hash de un bloque, debe ser una combinación válida de los campos del mismo
         """
-        #if block.last_hash != last_block.hash:
-            #raise Exception('El "last_hash" del bloque debe ser correcto')
+        if block.last_hash != last_block.hash:
+            raise Exception('El "last_hash" del bloque debe ser correcto')
 
         if hex_to_binary(block.hash)[0:block.difficulty] != '0' * block.difficulty:
             raise Exception('No se cumple la prueba de trabajo')
@@ -133,8 +133,9 @@ class Block:
             block.timestamp,
             block.last_hash,
             block.data,
+            block.difficulty,
             block.nonce,
-            block.difficulty
+            block.number
         )
 
         if block.hash != reconstructed_hash:

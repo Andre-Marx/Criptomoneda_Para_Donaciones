@@ -1,11 +1,14 @@
+**Versión de Python**
+Python 3.8.18
+
 **Crear un ambiente virtual**
 ```
-python3 -m venv blockchain-env
+python -m venv venv
 ```
 
 **Activar el ambiente virtual**
 ```
-source blockchain-env/bin/activate
+source venv/bin/activate
 ```
 
 **Instalar todos los paquetes**

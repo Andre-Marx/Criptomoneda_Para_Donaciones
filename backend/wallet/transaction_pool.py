@@ -1,3 +1,6 @@
+from backend.wallet.wallet import Wallet
+
+
 class TransactionPool:
     def __init__(self):
         self.transaction_map = {}
@@ -15,6 +18,27 @@ class TransactionPool:
         for transaction in self.transaction_map.values():
             if transaction.input['address'] == address:
                 return transaction
+
+    def wallet_transactions(self, address):
+        """
+        Regresa las transacciones pendientes generadas por una dirección.
+        """
+        return [
+            transaction
+            for transaction in self.transaction_map.values()
+            if transaction.input['address'] == address
+        ]
+
+    def available_balance(self, blockchain, address):
+        """
+        Calcula el saldo disponible restando transacciones pendientes del pool.
+        """
+        balance = Wallet.calculate_balance(blockchain, address)
+
+        for transaction in self.wallet_transactions(address):
+            balance = transaction.output.get(address, balance)
+
+        return balance
 
     def transaction_data(self):
         """
