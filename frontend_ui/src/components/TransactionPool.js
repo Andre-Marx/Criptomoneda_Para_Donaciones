@@ -48,10 +48,15 @@ function TransactionPool() {
 
         fetch(`${API_BASE_URL}/blockchain/mine`)
             .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                return response.json().then(json => {
+                    if (!response.ok) {
+                        throw new Error(json.message || `HTTP ${response.status}`);
+                    }
 
+                    return json;
+                });
+            })
+            .then(() => {
                 alert('¡Éxito!');
                 history.push('/blockchain');
             })
@@ -85,9 +90,11 @@ function TransactionPool() {
             <Button
                 variant="danger"
                 onClick={fetchMineBlock}
-                disabled={isMining}
+                disabled={isMining || transactions.length === 0}
             >
-                {isMining ? 'Minando...' : 'Mina un bloque con estas transacciones'}
+                {transactions.length === 0
+                    ? 'Agrega transacciones para minar'
+                    : isMining ? 'Minando...' : 'Mina un bloque con estas transacciones'}
             </Button>
         </div>
     )

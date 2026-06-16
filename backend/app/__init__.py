@@ -84,13 +84,23 @@ NONPROFIT_ORGANIZATION_DATA = [
     }
 ]
 
+nonprofit_organization_wallets = [
+    Wallet(blockchain)
+    for _ in NONPROFIT_ORGANIZATION_DATA
+]
+
 nonprofit_organizations = [
     {
         **organization,
-        'address_wallet': Wallet(blockchain).address
+        'address_wallet': organization_wallet.address
     }
-    for organization in NONPROFIT_ORGANIZATION_DATA
+    for organization, organization_wallet in zip(NONPROFIT_ORGANIZATION_DATA, nonprofit_organization_wallets)
 ]
+
+nonprofit_wallet_by_address = {
+    organization_wallet.address: organization_wallet
+    for organization_wallet in nonprofit_organization_wallets
+}
 
 
 def get_pubsub():
@@ -139,6 +149,10 @@ def route_blockchain_length():
 @app.route('/blockchain/mine')
 def route_blockchain_mine():
     transaction_data = transaction_pool.transaction_data()
+
+    if len(transaction_data) == 0:
+        return jsonify({'message': 'No hay transacciones pendientes para minar.'}), 400
+
     transaction_data.append(Transaction.reward_transaction(wallet).to_json())
     blockchain.add_block(transaction_data)
     block = blockchain.chain[-1]
@@ -153,52 +167,58 @@ def route_blockchain_mine():
 @app.route('/wallet/transact', methods=['POST'])
 def route_wallet_transact():
     transaction_data = request.get_json()
-    transaction = transaction_pool.existing_transaction(wallet.address)
- 
-    if transaction:
-        transaction.update(
-            wallet,
+
+    try:
+        available_balance = transaction_pool.available_balance(blockchain, wallet.address)
+        recipient = nonprofit_wallet_by_address.get(
             transaction_data['recipient'],
-            transaction_data['amount']
+            transaction_data['recipient']
         )
-    else:
+
         transaction = Transaction(
             wallet,
-            transaction_data['recipient'],
-            transaction_data['amount']
+            recipient,
+            transaction_data['amount'],
+            sender_balance=available_balance
         )
- 
-    transaction_pool.set_transaction(transaction)
-    broadcast_transaction(transaction)
- 
-    return jsonify(transaction.to_json())
+        transaction_pool.set_transaction(transaction)
+        broadcast_transaction(transaction)
+
+        return jsonify(transaction.to_json())
+
+    except Exception as e:
+        return jsonify({'message': str(e)}), 400
 
 @app.route('/wallet/transact_test', methods=['POST'])
 def route_wallet_transact_test():
     transaction_data = request.get_json()
-    transaction = transaction_pool.existing_transaction(wallet.address)
-
-    if transaction:
-        transaction.update(
-            wallet,
-            transaction_data['recipient'],
-            transaction_data['amount']
-        )
-    else:
+ 
+    try:
+        available_balance = transaction_pool.available_balance(blockchain, wallet.address)
         transaction = Transaction(
             wallet,
             recipient_wallet,
-            transaction_data['amount']
+            transaction_data['amount'],
+            sender_balance=available_balance
         )
- 
-    transaction_pool.set_transaction(transaction)
-    broadcast_transaction(transaction)
- 
-    return jsonify(transaction.to_json())
+        transaction_pool.set_transaction(transaction)
+        broadcast_transaction(transaction)
+
+        return jsonify(transaction.to_json())
+
+    except Exception as e:
+        return jsonify({'message': str(e)}), 400
 
 @app.route('/wallet/info')
 def route_wallet_info():
-    return jsonify({'address': wallet.address, 'balance':wallet.balance})
+    pending_balance = transaction_pool.available_balance(blockchain, wallet.address)
+
+    return jsonify({
+        'address': wallet.address,
+        'balance': wallet.balance,
+        'pending_balance': pending_balance,
+        'pending_spend': wallet.balance - pending_balance
+    })
 
 @app.route('/nonprofit-organizations')
 def route_nonprofit_organizations():
@@ -284,13 +304,25 @@ def seed_data():
         second_organization = nonprofit_organizations[(i + 1) % len(nonprofit_organizations)]
 
         blockchain.add_block([
-            Transaction(Wallet(blockchain), first_organization['address_wallet'], random.randint(2,50)).to_json(),
-            Transaction(Wallet(blockchain), second_organization['address_wallet'], random.randint(2,50)).to_json()
+            Transaction(
+                Wallet(blockchain),
+                nonprofit_wallet_by_address[first_organization['address_wallet']],
+                random.randint(2,50)
+            ).to_json(),
+            Transaction(
+                Wallet(blockchain),
+                nonprofit_wallet_by_address[second_organization['address_wallet']],
+                random.randint(2,50)
+            ).to_json()
         ])
 
     for i in range(3):
         organization = nonprofit_organizations[i % len(nonprofit_organizations)]
-        transaction_pool.set_transaction(Transaction(Wallet(blockchain), organization['address_wallet'], random.randint(2,50)))
+        transaction_pool.set_transaction(Transaction(
+            Wallet(blockchain),
+            nonprofit_wallet_by_address[organization['address_wallet']],
+            random.randint(2,50)
+        ))
 
 
 def main():

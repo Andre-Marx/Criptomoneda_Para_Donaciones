@@ -66,6 +66,16 @@ def test_replace_chain_bad_chain(blockchain_three_blocks):
 def test_valid_transaction_chain(blockchain_three_blocks):
     Blockchain.is_valid_transaction_chain(blockchain_three_blocks.chain)
 
+def test_valid_transaction_chain_multiple_sender_transactions_same_block():
+    blockchain = Blockchain()
+    wallet = Wallet(blockchain)
+    transaction_1 = Transaction(wallet, 'recipient_1', 100)
+    transaction_2 = Transaction(wallet, 'recipient_2', 200, sender_balance=900)
+
+    blockchain.add_block([transaction_1.to_json(), transaction_2.to_json()])
+
+    Blockchain.is_valid_transaction_chain(blockchain.chain)
+
 def test_is_valid_transaction_chain_duplicates_transactions(blockchain_three_blocks):
     transaction = Transaction(Wallet(), 'recipient', 1).to_json()
 

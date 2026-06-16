@@ -1,4 +1,5 @@
 import React, {useState, useEffect} from "react";
+import { useHistory } from 'react-router-dom';
 import { Link } from "react-router-dom";
 import logo from '../assets/hopecoin-logo.svg';
 import {API_BASE_URL} from '../config';
@@ -9,8 +10,8 @@ function App() {
   const [error, setError] = useState('');
   const [blockchainLength, setBlockchainLength] = useState('-');
   const [pendingTransactions, setPendingTransactions] = useState([]);
-  const [isMining, setIsMining] = useState(false);
   const [message, setMessage] = useState('');
+  const history = useHistory();
 
   const fetchDashboard = () => {
     setError('');
@@ -38,28 +39,6 @@ function App() {
       .catch(() => {
         setError('No se pudo conectar con el backend. Ejecuta python3 -m backend.app en otra terminal.');
       });
-  };
-
-  const mineTransactions = () => {
-    setIsMining(true);
-    setMessage('');
-
-    fetch(`${API_BASE_URL}/blockchain/mine`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        return response.json();
-      })
-      .then(() => {
-        setMessage('Bloque minado y transacciones consolidadas.');
-        fetchDashboard();
-      })
-      .catch(error => {
-        setMessage(`No se pudo minar: ${error.message}`);
-      })
-      .finally(() => setIsMining(false));
   };
 
   useEffect(() => {
@@ -119,10 +98,14 @@ function App() {
             <small>Selecciona una organización simulada y envía HopeCoins.</small>
           </Link>
 
-          <button className="action-card action-button" type="button" onClick={mineTransactions} disabled={isMining}>
+          <button className="action-card action-button" type="button" onClick={() => history.push('/transaction-pool')}>
             <span className="action-icon">⬡</span>
-            <strong>{isMining ? 'Minando...' : 'Minar transacciones'}</strong>
-            <small>Consolida el pool en un nuevo bloque de la cadena.</small>
+            <strong>Minar transacciones</strong>
+            <small>
+              {pendingTransactions.length > 0
+                ? 'Revisa el mempool y consolida el bloque.'
+                : 'Primero agrega una transacción al mempool.'}
+            </small>
           </button>
         </article>
       </section>

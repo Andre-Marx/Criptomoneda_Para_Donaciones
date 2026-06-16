@@ -21,6 +21,18 @@ def test_transaction():
 
     assert Wallet.verify(transaction.input['public_key'], transaction.output, transaction.input['signature'])
 
+def test_transaction_with_wallet_recipient_has_hex_signatures():
+    sender_wallet = Wallet()
+    recipient_wallet = Wallet()
+    transaction = Transaction(sender_wallet, recipient_wallet, 50)
+
+    assert transaction.signatures['sender']['signature'] == transaction.input['signature']
+    assert transaction.signatures['recipient']['address'] == recipient_wallet.address
+    assert isinstance(transaction.signatures['sender']['signature'], str)
+    assert isinstance(transaction.signatures['recipient']['signature'], str)
+    int(transaction.signatures['sender']['signature'], 16)
+    int(transaction.signatures['recipient']['signature'], 16)
+
 
 def test_transaction_exceeds_balance():
     with pytest.raises(Exception, match = 'El monto es mayor al balance'):

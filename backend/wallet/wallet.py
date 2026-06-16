@@ -7,7 +7,6 @@ from backend.config import STARTING_BALANCE
 # from cryptography.hazmat.backends import default_backend
 # from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives.asymmetric.utils import (encode_dss_signature, decode_dss_signature)
 # from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -37,10 +36,7 @@ class Wallet:
         Genera la firma basada en los datos y la llave privada local.
         """
         data_hashing = hashlib.sha512(str(data).encode('utf-8')).digest()
-        # return self.private_key.sign(data_hashing)
-
-        # print(f'\nFirma: {self.private_key.sign(data_hashing)}')
-        return int.from_bytes(self.private_key.sign(data_hashing)[:32], 'little'), int.from_bytes(self.private_key.sign(data_hashing)[32:], 'little')
+        return self.private_key.sign(data_hashing).hex()
 
     def serialize_public_key(self):
         """
@@ -88,12 +84,17 @@ class Wallet:
 
         # print(f'\nsignature: {signature}\n')
 
-        (r,s) = signature 
-
-        # print(f"\nFirma Regreso: {(r.to_bytes(32, 'little') + s.to_bytes(32, 'little'))}")
+        if isinstance(signature, str):
+            try:
+                signature_bytes = bytes.fromhex(signature)
+            except ValueError:
+                return False
+        else:
+            (r, s) = signature
+            signature_bytes = r.to_bytes(32, 'little') + s.to_bytes(32, 'little')
 
         try:
-            deserialized_public_key.verify((r.to_bytes(32, 'little') + s.to_bytes(32, 'little')), data_hashing)
+            deserialized_public_key.verify(signature_bytes, data_hashing)
             return True
 
         except InvalidSignature:

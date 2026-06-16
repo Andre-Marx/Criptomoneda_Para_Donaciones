@@ -379,6 +379,37 @@ h1 {
   margin: 12px 0;
 }
 
+.transaction-balance-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: min(760px, 100%);
+  margin: 0 auto 16px;
+}
+
+.transaction-balance-strip div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 250, 241, 0.9);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+}
+
+.transaction-balance-strip span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.transaction-balance-strip strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--anahuac-wine);
+  font-size: 24px;
+}
+
 .selection-summary {
   display: grid;
   gap: 8px;
@@ -628,6 +659,37 @@ h1 {
   color: var(--muted);
 }
 
+.signature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.signature-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(121, 0, 31, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.signature-field strong {
+  color: var(--anahuac-wine);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.signature-field code {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .transaction-list {
   display: grid;
   gap: 12px;
@@ -705,7 +767,8 @@ hr {
 
   .dashboard-grid,
   .action-panel,
-  .chain-overview {
+  .chain-overview,
+  .transaction-balance-strip {
     grid-template-columns: 1fr;
   }
 
@@ -771,6 +834,10 @@ hr {
   }
 
   .block-header-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .signature-grid {
     grid-template-columns: 1fr;
   }
 }
