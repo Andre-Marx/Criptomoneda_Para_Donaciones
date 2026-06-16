@@ -5,7 +5,7 @@ python3 -m venv blockchain-env
 
 **Activar el ambiente virtual**
 ```
-source blockchain-env/bin/activate
+source venv/bin/activate
 ```
 
 **Instalar todos los paquetes**
