@@ -39,6 +39,10 @@ class SocketNetwork:
     def status(self):
         with self.lock:
             peers = list(self.peers.values())
+            unique_peer_ids = {
+                peer.get('node_id') or peer.get('peer_id')
+                for peer in peers
+            }
 
         return {
             'node_id': self.node_id,
@@ -48,7 +52,8 @@ class SocketNetwork:
             'root_host': self.root_host,
             'root_port': self.root_port,
             'connected': self.mode == 'server' or self.root_socket is not None,
-            'peer_count': len(peers),
+            'peer_count': len(unique_peer_ids),
+            'connection_count': len(peers),
             'peers': peers
         }
 
@@ -115,6 +120,7 @@ class SocketNetwork:
         with self.lock:
             self.clients[peer_id] = client_socket
             self.peers[peer_id] = {
+                'peer_id': peer_id,
                 'node_id': peer_id,
                 'address': address[0],
                 'port': address[1],

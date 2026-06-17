@@ -167,6 +167,90 @@ def get_network():
     return p2p_network
 
 
+def is_root_node():
+    return get_p2p_mode() == 'server'
+
+
+def network_state_payload():
+    return {
+        'type': 'SYNC_STATE',
+        'authoritative': True,
+        'node_id': NODE_ID,
+        'chain': blockchain.to_json(),
+        'transactions': transaction_pool.transaction_data(),
+        'nonprofit_organizations': nonprofit_organizations,
+        'mining': mining_status_snapshot()
+    }
+
+
+def broadcast_sync_state():
+    if not is_root_node():
+        return
+
+    get_network().broadcast(network_state_payload())
+
+
+def parse_valid_transaction(transaction_json):
+    transaction = Transaction.from_json(transaction_json)
+    Transaction.is_valid_transaction(transaction)
+    return transaction
+
+
+def replace_transaction_pool(transactions_json):
+    transactions = [
+        parse_valid_transaction(transaction_json)
+        for transaction_json in transactions_json
+    ]
+
+    transaction_pool.replace_transactions(transactions)
+    transaction_pool.clear_blockchain_transactions(blockchain)
+
+
+def apply_mining_snapshot(snapshot):
+    if not snapshot:
+        return
+
+    with mining_lock:
+        for miner_id, miner_state in snapshot.get('active_miners', {}).items():
+            if miner_id == NODE_ID:
+                continue
+
+            mining_state['active_miners'][miner_id] = miner_state
+
+    if snapshot.get('winner'):
+        mark_mining_winner(
+            snapshot.get('winner'),
+            winner_address=snapshot.get('winner_address'),
+            block_hash=snapshot.get('hash'),
+            nonce=snapshot.get('nonce'),
+            difficulty=snapshot.get('difficulty')
+        )
+
+
+def mark_mining_started(message):
+    origin_node_id = message.get('origin_node_id') or message.get('node_id')
+
+    if not origin_node_id or origin_node_id == NODE_ID:
+        return
+
+    with mining_lock:
+        if not mining_state['is_mining'] and mining_state['status'] in ('idle', 'won', 'won_by_peer', 'stopped'):
+            mining_state.update({
+                'status': 'observing',
+                'nonce': 0,
+                'hash': '-',
+                'difficulty': message.get('difficulty', P2P_MINING_DIFFICULTY),
+                'winner': None,
+                'winner_address': None,
+                'message': 'Competencia de minado iniciada por otro nodo.',
+                'started_at': time.time(),
+                'finished_at': None,
+                'active_miners': {}
+            })
+
+    update_peer_mining_state(message)
+
+
 def update_peer_mining_state(message):
     origin_node_id = message.get('origin_node_id') or message.get('node_id')
 
@@ -225,12 +309,13 @@ def mark_mining_winner(winner_node_id, winner_address=None, block_hash=None, non
 
 
 def accept_network_transaction(transaction_json):
-    transaction = Transaction.from_json(transaction_json)
+    transaction = parse_valid_transaction(transaction_json)
 
     if transaction.id in transaction_pool.transaction_map:
-        return
+        return False
 
     transaction_pool.set_transaction(transaction)
+    return True
 
 
 def accept_network_block(block_json, winner_node_id=None, winner_address=None):
@@ -247,10 +332,10 @@ def accept_network_block(block_json, winner_node_id=None, winner_address=None):
                 nonce=block.nonce,
                 difficulty=block.difficulty
             )
-            return
+            return False
 
         if block.last_hash != blockchain.chain[-1].hash:
-            return
+            return False
 
         Block.is_valid_block(blockchain.chain[-1], block)
         candidate_chain = blockchain.chain + [block]
@@ -265,15 +350,53 @@ def accept_network_block(block_json, winner_node_id=None, winner_address=None):
         nonce=block.nonce,
         difficulty=block.difficulty
     )
+    return True
 
 
-def accept_network_chain(chain_json):
-    if len(chain_json) <= len(blockchain.chain):
-        return
+def accept_network_chain(chain_json, authoritative=False):
+    if not chain_json:
+        return False
 
     incoming_blockchain = Blockchain.from_json(chain_json)
-    blockchain.replace_chain(incoming_blockchain.chain)
-    transaction_pool.clear_blockchain_transactions(blockchain)
+
+    with chain_lock:
+        has_same_tip = (
+            len(incoming_blockchain.chain) == len(blockchain.chain)
+            and incoming_blockchain.chain[-1].hash == blockchain.chain[-1].hash
+        )
+
+        if has_same_tip:
+            return False
+
+        if authoritative:
+            if len(incoming_blockchain.chain) < len(blockchain.chain):
+                return False
+
+            Blockchain.is_valid_chain(incoming_blockchain.chain)
+            blockchain.chain = incoming_blockchain.chain
+        else:
+            if len(incoming_blockchain.chain) <= len(blockchain.chain):
+                return False
+
+            blockchain.replace_chain(incoming_blockchain.chain)
+
+        transaction_pool.clear_blockchain_transactions(blockchain)
+
+    return True
+
+
+def accept_network_state(message):
+    authoritative = bool(message.get('authoritative'))
+
+    accept_network_chain(message.get('chain', []), authoritative=authoritative)
+
+    if authoritative:
+        replace_transaction_pool(message.get('transactions', []))
+    else:
+        for transaction_json in message.get('transactions', []):
+            accept_network_transaction(transaction_json)
+
+    apply_mining_snapshot(message.get('mining'))
 
 
 def handle_network_message(message, peer_id=None):
@@ -284,15 +407,21 @@ def handle_network_message(message, peer_id=None):
 
     try:
         if message_type == 'TRANSACTION':
-            accept_network_transaction(message['transaction'])
-        elif message_type == 'MINING_STARTED' or message_type == 'MINING_PROGRESS':
+            if accept_network_transaction(message['transaction']) and is_root_node():
+                broadcast_sync_state()
+        elif message_type == 'MINING_STARTED':
+            mark_mining_started(message)
+        elif message_type == 'MINING_PROGRESS':
             update_peer_mining_state(message)
         elif message_type == 'BLOCK_MINED':
-            accept_network_block(
+            accepted = accept_network_block(
                 message['block'],
                 winner_node_id=message.get('winner_node_id'),
                 winner_address=message.get('winner_address')
             )
+
+            if accepted and is_root_node():
+                broadcast_sync_state()
         elif message_type == 'MINING_WINNER':
             mark_mining_winner(
                 message.get('winner_node_id') or message.get('node_id') or message.get('origin_node_id'),
@@ -301,18 +430,12 @@ def handle_network_message(message, peer_id=None):
                 nonce=message.get('nonce'),
                 difficulty=message.get('difficulty')
             )
+            if is_root_node():
+                broadcast_sync_state()
         elif message_type == 'SYNC_REQUEST' and get_p2p_mode() == 'server':
-            get_network().send_to_peer(peer_id, {
-                'type': 'SYNC_STATE',
-                'chain': blockchain.to_json(),
-                'transactions': transaction_pool.transaction_data(),
-                'nonprofit_organizations': nonprofit_organizations
-            })
+            get_network().send_to_peer(peer_id, network_state_payload())
         elif message_type == 'SYNC_STATE':
-            accept_network_chain(message.get('chain', []))
-
-            for transaction_json in message.get('transactions', []):
-                accept_network_transaction(transaction_json)
+            accept_network_state(message)
     except Exception as e:
         print(f'\n -- Mensaje P2P ignorado por error: {e}')
 
@@ -439,8 +562,10 @@ def mine_competition_block(transaction_data, last_block):
         'winner_node_id': NODE_ID,
         'winner_address': wallet.address,
         'hash': block.hash,
-        'nonce': block.nonce
+        'nonce': block.nonce,
+        'difficulty': block.difficulty
     })
+    broadcast_sync_state()
 
 @app.route('/')
 def test():
@@ -486,29 +611,35 @@ def route_blockchain_mine():
 
     with mining_lock:
         if mining_state['is_mining']:
-            return jsonify(mining_status_snapshot()), 409
+            already_mining = True
+        else:
+            already_mining = False
 
-        mining_stop_event = threading.Event()
-        mining_state.update({
-            'status': 'mining',
-            'is_mining': True,
-            'nonce': 0,
-            'hash': '-',
-            'difficulty': P2P_MINING_DIFFICULTY,
-            'winner': None,
-            'winner_address': None,
-            'message': 'Competencia de minado iniciada.',
-            'started_at': time.time(),
-            'finished_at': None
-        })
-        mining_state['active_miners'][NODE_ID] = {
-            'node_id': NODE_ID,
-            'status': 'mining',
-            'nonce': 0,
-            'hash': '-',
-            'difficulty': P2P_MINING_DIFFICULTY,
-            'updated_at': time.time()
-        }
+            mining_stop_event = threading.Event()
+            mining_state.update({
+                'status': 'mining',
+                'is_mining': True,
+                'nonce': 0,
+                'hash': '-',
+                'difficulty': P2P_MINING_DIFFICULTY,
+                'winner': None,
+                'winner_address': None,
+                'message': 'Competencia de minado iniciada.',
+                'started_at': time.time(),
+                'finished_at': None,
+                'active_miners': {}
+            })
+            mining_state['active_miners'][NODE_ID] = {
+                'node_id': NODE_ID,
+                'status': 'mining',
+                'nonce': 0,
+                'hash': '-',
+                'difficulty': P2P_MINING_DIFFICULTY,
+                'updated_at': time.time()
+            }
+
+    if already_mining:
+        return jsonify(mining_status_snapshot()), 409
 
     get_network().broadcast({
         'type': 'MINING_STARTED',
@@ -575,6 +706,7 @@ def route_wallet_transact():
         )
         transaction_pool.set_transaction(transaction)
         broadcast_transaction(transaction)
+        broadcast_sync_state()
 
         return jsonify(transaction.to_json())
 
@@ -595,6 +727,7 @@ def route_wallet_transact_test():
         )
         transaction_pool.set_transaction(transaction)
         broadcast_transaction(transaction)
+        broadcast_sync_state()
 
         return jsonify(transaction.to_json())
 
@@ -679,14 +812,17 @@ def sync_with_root_node():
     try:
         root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
         root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
-        result = requests.get(f'http://{root_host}:{root_port}/blockchain')
+        result = requests.get(f'http://{root_host}:{root_port}/blockchain', timeout=2)
         result.raise_for_status()
         #print(f'result.json(): {result.json()}')
         print(f'Cadena Actual: {result.json()}')
 
-        result_blockchain = Blockchain.from_json(result.json())
-        blockchain.replace_chain(result_blockchain.chain)
-        print('\n -- Cadena local sincronizada con éxito')
+        accept_network_chain(result.json(), authoritative=True)
+
+        transactions_result = requests.get(f'http://{root_host}:{root_port}/transactions', timeout=2)
+        transactions_result.raise_for_status()
+        replace_transaction_pool(transactions_result.json())
+        print('\n -- Cadena local y mempool sincronizados con éxito')
     except Exception as e:
         #print(f'\n -- Error de sincronización: {e}')
         print('Bienvenido a la red')
@@ -723,8 +859,10 @@ def main():
     port = PORT
     mode = get_p2p_mode()
 
-    if mode == 'peer' and os.environ.get('PORT') is None:
-        port = random.randint(5001, 6000)
+    if mode == 'peer':
+        if os.environ.get('PORT') is None:
+            port = random.randint(5001, 6000)
+
         sync_with_root_node()
 
     os.environ['PORT'] = str(port)

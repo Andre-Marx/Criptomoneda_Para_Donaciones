@@ -5,7 +5,7 @@ import Transaction from './Transaction';
 import { API_BASE_URL, SECONDS_JS} from "../config";
 import BrandHomeLink from './BrandHomeLink';
 
-const POLL_INTERVAL = 10 * SECONDS_JS;
+const POLL_INTERVAL = 1 * SECONDS_JS;
 const MINING_POLL_INTERVAL = 1 * SECONDS_JS;
 
 function shortenHash(value) {

@@ -2,8 +2,9 @@ import React, {useState, useEffect} from "react";
 import { useHistory } from 'react-router-dom';
 import { Link } from "react-router-dom";
 import logo from '../assets/hopecoin-logo.svg';
-import {API_BASE_URL} from '../config';
+import {API_BASE_URL, SECONDS_JS} from '../config';
 
+const DASHBOARD_POLL_INTERVAL = 2 * SECONDS_JS;
 
 function App() {
   const [walletInfo, setWalletInfo] = useState({});
@@ -43,6 +44,10 @@ function App() {
 
   useEffect(() => {
     fetchDashboard();
+
+    const intervalId = setInterval(fetchDashboard, DASHBOARD_POLL_INTERVAL);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const {address, balance} = walletInfo;
