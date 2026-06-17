@@ -100,9 +100,13 @@ NONPROFIT_ORGANIZATION_DATA = [
     }
 ]
 
+def nonprofit_wallet_seed(index, organization):
+    return f"hopecoin:nonprofit:{index}:{organization['name']}"
+
+
 nonprofit_organization_wallets = [
-    Wallet(blockchain)
-    for _ in NONPROFIT_ORGANIZATION_DATA
+    Wallet.from_seed(nonprofit_wallet_seed(index, organization), blockchain)
+    for index, organization in enumerate(NONPROFIT_ORGANIZATION_DATA)
 ]
 
 nonprofit_organizations = [
@@ -124,6 +128,25 @@ def get_p2p_mode():
         return 'peer'
 
     return os.environ.get('P2P_MODE', 'server').lower()
+
+
+def get_root_http_url():
+    root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
+    root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
+
+    return f'http://{root_host}:{root_port}'
+
+
+def get_root_network_status():
+    if get_p2p_mode() != 'peer':
+        return None
+
+    try:
+        result = requests.get(f'{get_root_http_url()}/network/status', timeout=1.5)
+        result.raise_for_status()
+        return result.json()
+    except Exception:
+        return None
 
 
 def get_network():
@@ -161,6 +184,46 @@ def update_peer_mining_state(message):
         }
 
 
+def mark_mining_winner(winner_node_id, winner_address=None, block_hash=None, nonce=None, difficulty=None):
+    global mining_stop_event
+
+    if not winner_node_id:
+        return
+
+    mining_stop_event.set()
+
+    with mining_lock:
+        now = time.time()
+        final_hash = block_hash or mining_state.get('hash', '-')
+        final_nonce = nonce if nonce is not None else mining_state.get('nonce', 0)
+        final_difficulty = difficulty or mining_state.get('difficulty', P2P_MINING_DIFFICULTY)
+
+        for miner_id, miner_state in mining_state['active_miners'].items():
+            if miner_id != winner_node_id and miner_state.get('status') == 'mining':
+                miner_state['status'] = 'stopped'
+                miner_state['updated_at'] = now
+
+        mining_state.update({
+            'status': 'won' if winner_node_id == NODE_ID else 'won_by_peer',
+            'is_mining': False,
+            'nonce': final_nonce,
+            'hash': final_hash,
+            'difficulty': final_difficulty,
+            'winner': winner_node_id,
+            'winner_address': winner_address,
+            'message': f'{winner_node_id} gano la competencia de minado.',
+            'finished_at': now
+        })
+        mining_state['active_miners'][winner_node_id] = {
+            'node_id': winner_node_id,
+            'status': 'winner',
+            'nonce': final_nonce,
+            'hash': final_hash,
+            'difficulty': final_difficulty,
+            'updated_at': now
+        }
+
+
 def accept_network_transaction(transaction_json):
     transaction = Transaction.from_json(transaction_json)
 
@@ -177,6 +240,13 @@ def accept_network_block(block_json, winner_node_id=None, winner_address=None):
 
     with chain_lock:
         if block.hash in set(map(lambda chain_block: chain_block.hash, blockchain.chain)):
+            mark_mining_winner(
+                winner_node_id,
+                winner_address=winner_address,
+                block_hash=block.hash,
+                nonce=block.nonce,
+                difficulty=block.difficulty
+            )
             return
 
         if block.last_hash != blockchain.chain[-1].hash:
@@ -188,20 +258,13 @@ def accept_network_block(block_json, winner_node_id=None, winner_address=None):
         blockchain.chain.append(block)
         transaction_pool.clear_blockchain_transactions(blockchain)
 
-    mining_stop_event.set()
-
-    with mining_lock:
-        mining_state.update({
-            'status': 'won_by_peer' if winner_node_id != NODE_ID else 'won',
-            'is_mining': False,
-            'nonce': block.nonce,
-            'hash': block.hash,
-            'difficulty': block.difficulty,
-            'winner': winner_node_id,
-            'winner_address': winner_address,
-            'message': f'Bloque publicado por {winner_node_id}.',
-            'finished_at': time.time()
-        })
+    mark_mining_winner(
+        winner_node_id,
+        winner_address=winner_address,
+        block_hash=block.hash,
+        nonce=block.nonce,
+        difficulty=block.difficulty
+    )
 
 
 def accept_network_chain(chain_json):
@@ -231,15 +294,19 @@ def handle_network_message(message, peer_id=None):
                 winner_address=message.get('winner_address')
             )
         elif message_type == 'MINING_WINNER':
-            update_peer_mining_state({
-                **message,
-                'status': 'winner'
-            })
+            mark_mining_winner(
+                message.get('winner_node_id') or message.get('node_id') or message.get('origin_node_id'),
+                winner_address=message.get('winner_address'),
+                block_hash=message.get('hash'),
+                nonce=message.get('nonce'),
+                difficulty=message.get('difficulty')
+            )
         elif message_type == 'SYNC_REQUEST' and get_p2p_mode() == 'server':
             get_network().send_to_peer(peer_id, {
                 'type': 'SYNC_STATE',
                 'chain': blockchain.to_json(),
-                'transactions': transaction_pool.transaction_data()
+                'transactions': transaction_pool.transaction_data(),
+                'nonprofit_organizations': nonprofit_organizations
             })
         elif message_type == 'SYNC_STATE':
             accept_network_chain(message.get('chain', []))
@@ -469,14 +536,25 @@ def route_mining_status():
 @app.route('/network/status')
 def route_network_status():
     network = get_network()
-
-    return jsonify({
+    status = {
         **network.status(),
         'lan_ip': get_lan_ip(),
         'api_port': int(os.environ.get('PORT', PORT)),
         'node_id': NODE_ID,
         'mining': mining_status_snapshot()
-    })
+    }
+    root_status = get_root_network_status()
+
+    if root_status:
+        status.update({
+            'peer_count': root_status.get('peer_count', status.get('peer_count', 0)),
+            'peers': root_status.get('peers', status.get('peers', [])),
+            'root_node_id': root_status.get('node_id'),
+            'root_lan_ip': root_status.get('lan_ip'),
+            'root_api_port': root_status.get('api_port')
+        })
+
+    return jsonify(status)
 
 @app.route('/wallet/transact', methods=['POST'])
 def route_wallet_transact():

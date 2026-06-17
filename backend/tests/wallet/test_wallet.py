@@ -18,6 +18,15 @@ def test_verify_invalid_signature():
 
     assert not Wallet.verify(Wallet().public_key, data, signature)
 
+def test_from_seed_generates_same_wallet():
+    wallet = Wallet.from_seed('Estrellas Solidarias')
+    matching_wallet = Wallet.from_seed('Estrellas Solidarias')
+    different_wallet = Wallet.from_seed('Manos que Sanan')
+
+    assert wallet.address == matching_wallet.address
+    assert wallet.public_key == matching_wallet.public_key
+    assert wallet.address != different_wallet.address
+
 def test_calculate_balance():
     blockchain = Blockchain()
     wallet = Wallet()
