@@ -73,11 +73,17 @@ class SocketNetwork:
         print(f'\n -- Red P2P escuchando en {self.host}:{self.port}')
 
         while True:
-            client_socket, address = self.server_socket.accept()
-            threading.Thread(target=self._handle_client, args=(client_socket, address), daemon=True).start()
+            try:
+                client_socket, address = self.server_socket.accept()
+                threading.Thread(target=self._handle_client, args=(client_socket, address), daemon=True).start()
+            except OSError as e:
+                print(f'\n -- Servidor P2P detenido o socket invalido: {e}')
+                break
 
     def _connect_to_root(self):
         while True:
+            root_socket = None
+
             try:
                 root_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 root_socket.connect((self.root_host, self.root_port))
@@ -95,8 +101,12 @@ class SocketNetwork:
                 print(f'\n -- Conectado al nodo raiz P2P {self.root_host}:{self.root_port}')
                 self._listen(root_socket)
             except OSError as e:
-                self.root_socket = None
                 print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}')
+            finally:
+                if self.root_socket is root_socket:
+                    self.root_socket = None
+
+                self._close_socket(root_socket)
                 time.sleep(3)
 
     def _handle_client(self, client_socket, address):
@@ -111,23 +121,19 @@ class SocketNetwork:
                 'connected_at': time.time()
             }
 
-        try:
-            self._listen(client_socket, peer_id)
-        finally:
-            with self.lock:
-                self.clients.pop(peer_id, None)
-                self.peers.pop(peer_id, None)
-
-            try:
-                client_socket.close()
-            except OSError:
-                pass
+        self._listen(client_socket, peer_id)
+        self._drop_client(peer_id, client_socket)
 
     def _listen(self, source_socket, peer_id=None):
         buffer = ''
 
         while True:
-            chunk = source_socket.recv(65536)
+            try:
+                chunk = source_socket.recv(65536)
+            except OSError as e:
+                if peer_id:
+                    print(f'\n -- Peer P2P desconectado ({peer_id}): {e}')
+                break
 
             if not chunk:
                 break
@@ -139,14 +145,18 @@ class SocketNetwork:
                 if not line.strip():
                     continue
 
-                message = json.loads(line)
+                try:
+                    message = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print(f'\n -- Mensaje P2P invalido ignorado: {e}')
+                    continue
 
                 if message.get('type') == 'HELLO':
                     self._register_hello(peer_id, message)
                     continue
 
                 if self.on_message:
-                    self.on_message(message)
+                    self.on_message(message, peer_id=peer_id)
 
                 if self.mode == 'server':
                     self._broadcast_to_clients(message, exclude_peer_id=peer_id)
@@ -163,6 +173,22 @@ class SocketNetwork:
                 'mode': message.get('mode', 'peer')
             }
 
+    def send_to_peer(self, peer_id, message):
+        with self.lock:
+            client_socket = self.clients.get(peer_id)
+
+        if not client_socket:
+            return
+
+        try:
+            self._send_line(client_socket, {
+                **message,
+                'origin_node_id': message.get('origin_node_id', self.node_id),
+                'sent_at': time.time()
+            })
+        except OSError:
+            self._drop_client(peer_id, client_socket)
+
     def _broadcast_to_clients(self, message, exclude_peer_id=None):
         with self.lock:
             clients = list(self.clients.items())
@@ -174,7 +200,7 @@ class SocketNetwork:
             try:
                 self._send_line(client_socket, message)
             except OSError:
-                pass
+                self._drop_client(peer_id, client_socket)
 
     def _send_to_root(self, message):
         if not self.root_socket:
@@ -183,10 +209,34 @@ class SocketNetwork:
         try:
             self._send_line(self.root_socket, message)
         except OSError:
+            self._close_socket(self.root_socket)
             self.root_socket = None
 
     def _send_line(self, destination_socket, message):
         destination_socket.sendall((json.dumps(message) + '\n').encode('utf-8'))
+
+    def _drop_client(self, peer_id, client_socket):
+        with self.lock:
+            if self.clients.get(peer_id) is client_socket:
+                self.clients.pop(peer_id, None)
+
+            self.peers.pop(peer_id, None)
+
+        self._close_socket(client_socket)
+
+    def _close_socket(self, target_socket):
+        if not target_socket:
+            return
+
+        try:
+            target_socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+        try:
+            target_socket.close()
+        except OSError:
+            pass
 
 
 def get_lan_ip():

@@ -213,7 +213,7 @@ def accept_network_chain(chain_json):
     transaction_pool.clear_blockchain_transactions(blockchain)
 
 
-def handle_network_message(message):
+def handle_network_message(message, peer_id=None):
     message_type = message.get('type')
 
     if message.get('origin_node_id') == NODE_ID:
@@ -236,7 +236,7 @@ def handle_network_message(message):
                 'status': 'winner'
             })
         elif message_type == 'SYNC_REQUEST' and get_p2p_mode() == 'server':
-            get_network().broadcast({
+            get_network().send_to_peer(peer_id, {
                 'type': 'SYNC_STATE',
                 'chain': blockchain.to_json(),
                 'transactions': transaction_pool.transaction_data()
