@@ -23,6 +23,9 @@ class SocketNetwork:
         self.clients = {}
         self.peers = {}
         self.lock = threading.Lock()
+        self.root_lock = threading.Lock()
+        self.write_locks = {}
+        self.write_locks_lock = threading.Lock()
         self.started = False
 
     def start(self):
@@ -44,6 +47,9 @@ class SocketNetwork:
                 for peer in peers
             }
 
+        with self.root_lock:
+            root_socket = self.root_socket
+
         return {
             'node_id': self.node_id,
             'mode': self.mode,
@@ -51,7 +57,7 @@ class SocketNetwork:
             'port': self.port,
             'root_host': self.root_host,
             'root_port': self.root_port,
-            'connected': self.mode == 'server' or self.root_socket is not None,
+            'connected': self.mode == 'server' or root_socket is not None,
             'peer_count': len(unique_peer_ids),
             'connection_count': len(peers),
             'peers': peers
@@ -91,8 +97,12 @@ class SocketNetwork:
 
             try:
                 root_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                root_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 root_socket.connect((self.root_host, self.root_port))
-                self.root_socket = root_socket
+
+                with self.root_lock:
+                    self.root_socket = root_socket
+
                 self._send_line(root_socket, {
                     'type': 'HELLO',
                     'node_id': self.node_id,
@@ -108,14 +118,16 @@ class SocketNetwork:
             except OSError as e:
                 print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}')
             finally:
-                if self.root_socket is root_socket:
-                    self.root_socket = None
+                with self.root_lock:
+                    if self.root_socket is root_socket:
+                        self.root_socket = None
 
                 self._close_socket(root_socket)
                 time.sleep(3)
 
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
+        client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         with self.lock:
             self.clients[peer_id] = client_socket
@@ -127,8 +139,10 @@ class SocketNetwork:
                 'connected_at': time.time()
             }
 
-        self._listen(client_socket, peer_id)
-        self._drop_client(peer_id, client_socket)
+        try:
+            self._listen(client_socket, peer_id)
+        finally:
+            self._drop_client(peer_id, client_socket)
 
     def _listen(self, source_socket, peer_id=None):
         buffer = ''
@@ -137,7 +151,7 @@ class SocketNetwork:
             try:
                 chunk = source_socket.recv(65536)
             except OSError as e:
-                if peer_id:
+                if peer_id and self._is_active_peer_socket(peer_id, source_socket):
                     print(f'\n -- Peer P2P desconectado ({peer_id}): {e}')
                 break
 
@@ -164,7 +178,7 @@ class SocketNetwork:
                 if self.on_message:
                     self.on_message(message, peer_id=peer_id)
 
-                if self.mode == 'server':
+                if self.mode == 'server' and message.get('type') not in ('SYNC_REQUEST', 'SYNC_STATE'):
                     self._broadcast_to_clients(message, exclude_peer_id=peer_id)
 
     def _register_hello(self, peer_id, message):
@@ -179,12 +193,14 @@ class SocketNetwork:
                 'mode': message.get('mode', 'peer')
             }
 
+        self._notify_peers_changed()
+
     def send_to_peer(self, peer_id, message):
         with self.lock:
             client_socket = self.clients.get(peer_id)
 
         if not client_socket:
-            return
+            return False
 
         try:
             self._send_line(client_socket, {
@@ -192,8 +208,10 @@ class SocketNetwork:
                 'origin_node_id': message.get('origin_node_id', self.node_id),
                 'sent_at': time.time()
             })
+            return True
         except OSError:
             self._drop_client(peer_id, client_socket)
+            return False
 
     def _broadcast_to_clients(self, message, exclude_peer_id=None):
         with self.lock:
@@ -209,26 +227,43 @@ class SocketNetwork:
                 self._drop_client(peer_id, client_socket)
 
     def _send_to_root(self, message):
-        if not self.root_socket:
+        with self.root_lock:
+            root_socket = self.root_socket
+
+        if not root_socket:
             return
 
         try:
-            self._send_line(self.root_socket, message)
+            self._send_line(root_socket, message)
         except OSError:
-            self._close_socket(self.root_socket)
-            self.root_socket = None
+            with self.root_lock:
+                if self.root_socket is root_socket:
+                    self.root_socket = None
+
+            self._close_socket(root_socket)
 
     def _send_line(self, destination_socket, message):
-        destination_socket.sendall((json.dumps(message) + '\n').encode('utf-8'))
+        payload = (json.dumps(message) + '\n').encode('utf-8')
+        write_lock = self._write_lock(destination_socket)
+
+        with write_lock:
+            destination_socket.sendall(payload)
 
     def _drop_client(self, peer_id, client_socket):
+        removed = False
+
         with self.lock:
             if self.clients.get(peer_id) is client_socket:
                 self.clients.pop(peer_id, None)
+                removed = True
 
-            self.peers.pop(peer_id, None)
+            if self.peers.pop(peer_id, None) is not None:
+                removed = True
 
         self._close_socket(client_socket)
+
+        if removed:
+            self._notify_peers_changed()
 
     def _close_socket(self, target_socket):
         if not target_socket:
@@ -243,6 +278,31 @@ class SocketNetwork:
             target_socket.close()
         except OSError:
             pass
+
+        with self.write_locks_lock:
+            self.write_locks.pop(id(target_socket), None)
+
+    def _write_lock(self, target_socket):
+        socket_id = id(target_socket)
+
+        with self.write_locks_lock:
+            if socket_id not in self.write_locks:
+                self.write_locks[socket_id] = threading.Lock()
+
+            return self.write_locks[socket_id]
+
+    def _is_active_peer_socket(self, peer_id, source_socket):
+        with self.lock:
+            return self.clients.get(peer_id) is source_socket
+
+    def _notify_peers_changed(self):
+        if self.mode != 'server' or not self.on_message:
+            return
+
+        try:
+            self.on_message({'type': 'PEERS_CHANGED', 'node_id': self.node_id}, peer_id=None)
+        except Exception as e:
+            print(f'\n -- No se pudo publicar el cambio de peers P2P: {e}')
 
 
 def get_lan_ip():

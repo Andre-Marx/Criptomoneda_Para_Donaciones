@@ -30,6 +30,9 @@ p2p_network = None
 chain_lock = threading.Lock()
 mining_lock = threading.Lock()
 mining_stop_event = threading.Event()
+root_network_status_lock = threading.Lock()
+root_network_status_cache = {}
+ROOT_NETWORK_STATUS_CACHE_TTL = 30
 os.environ.setdefault('P2P_ALLOW_DIFFICULTY_JUMP', 'True')
 
 NODE_ID = os.environ.get('NODE_ID', f'{socket.gethostname()}-{str(uuid.uuid4())[:6]}')
@@ -141,10 +144,24 @@ def get_root_network_status():
     if get_p2p_mode() != 'peer':
         return None
 
+    with root_network_status_lock:
+        cached_status = dict(root_network_status_cache)
+
+    local_p2p_status = p2p_network.status() if p2p_network else {}
+    cache_is_fresh = time.time() - cached_status.get('cached_at', 0) <= ROOT_NETWORK_STATUS_CACHE_TTL
+
+    if cached_status and (local_p2p_status.get('connected') or cache_is_fresh):
+        return cached_status
+
+    if os.environ.get('P2P_ROOT_STATUS_HTTP_FALLBACK', 'False') != 'True':
+        return None
+
     try:
         result = requests.get(f'{get_root_http_url()}/network/status', timeout=1.5)
         result.raise_for_status()
-        return result.json()
+        root_status = result.json()
+        cache_root_network_status(root_status)
+        return root_status
     except Exception:
         return None
 
@@ -171,6 +188,29 @@ def is_root_node():
     return get_p2p_mode() == 'server'
 
 
+def local_network_status_snapshot():
+    network = get_network()
+
+    return {
+        **network.status(),
+        'lan_ip': get_lan_ip(),
+        'api_port': int(os.environ.get('PORT', PORT)),
+        'node_id': NODE_ID
+    }
+
+
+def cache_root_network_status(root_status):
+    if not root_status:
+        return
+
+    with root_network_status_lock:
+        root_network_status_cache.clear()
+        root_network_status_cache.update({
+            **root_status,
+            'cached_at': time.time()
+        })
+
+
 def network_state_payload():
     return {
         'type': 'SYNC_STATE',
@@ -179,6 +219,7 @@ def network_state_payload():
         'chain': blockchain.to_json(),
         'transactions': transaction_pool.transaction_data(),
         'nonprofit_organizations': nonprofit_organizations,
+        'network': local_network_status_snapshot(),
         'mining': mining_status_snapshot()
     }
 
@@ -388,6 +429,7 @@ def accept_network_chain(chain_json, authoritative=False):
 def accept_network_state(message):
     authoritative = bool(message.get('authoritative'))
 
+    cache_root_network_status(message.get('network'))
     accept_network_chain(message.get('chain', []), authoritative=authoritative)
 
     if authoritative:
@@ -436,6 +478,8 @@ def handle_network_message(message, peer_id=None):
             get_network().send_to_peer(peer_id, network_state_payload())
         elif message_type == 'SYNC_STATE':
             accept_network_state(message)
+        elif message_type == 'PEERS_CHANGED' and is_root_node():
+            broadcast_sync_state()
     except Exception as e:
         print(f'\n -- Mensaje P2P ignorado por error: {e}')
 
@@ -666,12 +710,8 @@ def route_mining_status():
 
 @app.route('/network/status')
 def route_network_status():
-    network = get_network()
     status = {
-        **network.status(),
-        'lan_ip': get_lan_ip(),
-        'api_port': int(os.environ.get('PORT', PORT)),
-        'node_id': NODE_ID,
+        **local_network_status_snapshot(),
         'mining': mining_status_snapshot()
     }
     root_status = get_root_network_status()
