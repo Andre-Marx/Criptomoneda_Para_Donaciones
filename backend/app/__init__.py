@@ -432,17 +432,24 @@ def accept_network_chain(chain_json, authoritative=False):
 
 def accept_network_state(message):
     authoritative = bool(message.get('authoritative'))
+    chain_json = message.get('chain', [])
+    transactions_json = message.get('transactions', [])
 
     cache_root_network_status(message.get('network'))
-    accept_network_chain(message.get('chain', []), authoritative=authoritative)
+    accept_network_chain(chain_json, authoritative=authoritative)
 
     if authoritative:
-        replace_transaction_pool(message.get('transactions', []))
+        replace_transaction_pool(transactions_json)
     else:
-        for transaction_json in message.get('transactions', []):
+        for transaction_json in transactions_json:
             accept_network_transaction(transaction_json)
 
     apply_mining_snapshot(message.get('mining'))
+    print(
+        '\n -- Estado P2P sincronizado: '
+        f'{len(chain_json)} bloques, {len(transaction_pool.transaction_data())} transacciones en mempool',
+        flush=True
+    )
 
 
 def handle_network_message(message, peer_id=None):
@@ -479,13 +486,25 @@ def handle_network_message(message, peer_id=None):
             if is_root_node():
                 broadcast_sync_state()
         elif message_type == 'SYNC_REQUEST' and get_p2p_mode() == 'server':
-            get_network().send_to_peer(peer_id, network_state_payload())
+            payload = network_state_payload()
+            sent = get_network().send_to_peer(peer_id, payload)
+            print(
+                '\n -- Sync P2P enviado a '
+                f'{peer_id}: {len(payload.get("chain", []))} bloques, '
+                f'{len(payload.get("transactions", []))} transacciones, '
+                f'enviado={sent}',
+                flush=True
+            )
+            return sent
         elif message_type == 'SYNC_STATE':
             accept_network_state(message)
         elif message_type == 'PEERS_CHANGED' and is_root_node():
             broadcast_sync_state()
     except Exception as e:
         print(f'\n -- Mensaje P2P ignorado por error: {e}')
+        return False
+
+    return True
 
 
 def broadcast_block(block, winner_node_id=None, winner_address=None):

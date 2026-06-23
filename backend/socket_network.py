@@ -81,7 +81,7 @@ class SocketNetwork:
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(8)
-        print(f'\n -- Red P2P escuchando en {self.host}:{self.port}')
+        print(f'\n -- Red P2P escuchando en {self.host}:{self.port}', flush=True)
 
         while True:
             try:
@@ -108,15 +108,10 @@ class SocketNetwork:
                     'node_id': self.node_id,
                     'mode': self.mode
                 })
-                self._send_line(root_socket, {
-                    'type': 'SYNC_REQUEST',
-                    'node_id': self.node_id,
-                    'origin_node_id': self.node_id
-                })
-                print(f'\n -- Conectado al nodo raiz P2P {self.root_host}:{self.root_port}')
+                print(f'\n -- Conectado al nodo raiz P2P {self.root_host}:{self.root_port}', flush=True)
                 self._listen(root_socket)
             except OSError as e:
-                print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}')
+                print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}', flush=True)
             finally:
                 with self.root_lock:
                     if self.root_socket is root_socket:
@@ -128,6 +123,7 @@ class SocketNetwork:
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
         self._enable_tcp_low_latency(client_socket)
+        print(f'\n -- Conexion P2P entrante desde {peer_id}; esperando HELLO...', flush=True)
 
         try:
             self._listen(client_socket, peer_id, address)
@@ -142,10 +138,12 @@ class SocketNetwork:
                 chunk = source_socket.recv(65536)
             except OSError as e:
                 if peer_id and self._is_active_peer_socket(peer_id, source_socket):
-                    print(f'\n -- Peer P2P desconectado ({peer_id}): {e}')
+                    print(f'\n -- Peer P2P desconectado ({peer_id}): {e}', flush=True)
                 break
 
             if not chunk:
+                if peer_id and self._is_active_peer_socket(peer_id, source_socket):
+                    print(f'\n -- Peer P2P cerro la conexion ({peer_id})', flush=True)
                 break
 
             buffer += chunk.decode('utf-8')
@@ -206,7 +204,7 @@ class SocketNetwork:
         for stale_socket in stale_clients:
             self._close_socket(stale_socket)
 
-        self._notify_peers_changed()
+        print(f'\n -- Peer P2P registrado: {node_id} ({peer_id})', flush=True)
         self._notify_sync_requested(peer_id)
 
     def send_to_peer(self, peer_id, message):
@@ -277,7 +275,7 @@ class SocketNetwork:
         self._close_socket(client_socket)
 
         if removed:
-            self._notify_peers_changed()
+            print(f'\n -- Peer P2P removido: {peer_id}', flush=True)
 
     def _close_socket(self, target_socket):
         if not target_socket:
@@ -323,13 +321,14 @@ class SocketNetwork:
             return
 
         try:
-            self.on_message({
+            return self.on_message({
                 'type': 'SYNC_REQUEST',
                 'node_id': peer_id,
                 'origin_node_id': peer_id
             }, peer_id=peer_id)
         except Exception as e:
             print(f'\n -- No se pudo sincronizar el peer P2P ({peer_id}): {e}')
+            return False
 
     def _enable_tcp_low_latency(self, target_socket):
         try:
