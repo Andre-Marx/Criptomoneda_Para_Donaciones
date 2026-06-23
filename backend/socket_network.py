@@ -129,22 +129,12 @@ class SocketNetwork:
         peer_id = f'{address[0]}:{address[1]}'
         self._enable_tcp_low_latency(client_socket)
 
-        with self.lock:
-            self.clients[peer_id] = client_socket
-            self.peers[peer_id] = {
-                'peer_id': peer_id,
-                'node_id': peer_id,
-                'address': address[0],
-                'port': address[1],
-                'connected_at': time.time()
-            }
-
         try:
-            self._listen(client_socket, peer_id)
+            self._listen(client_socket, peer_id, address)
         finally:
             self._drop_client(peer_id, client_socket)
 
-    def _listen(self, source_socket, peer_id=None):
+    def _listen(self, source_socket, peer_id=None, address=None):
         buffer = ''
 
         while True:
@@ -172,7 +162,10 @@ class SocketNetwork:
                     continue
 
                 if message.get('type') == 'HELLO':
-                    self._register_hello(peer_id, message)
+                    self._register_hello(peer_id, source_socket, address, message)
+                    continue
+
+                if self.mode == 'server' and peer_id and not self._is_active_peer_socket(peer_id, source_socket):
                     continue
 
                 if self.on_message:
@@ -181,17 +174,37 @@ class SocketNetwork:
                 if self.mode == 'server' and message.get('type') not in ('SYNC_REQUEST', 'SYNC_STATE'):
                     self._broadcast_to_clients(message, exclude_peer_id=peer_id)
 
-    def _register_hello(self, peer_id, message):
+    def _register_hello(self, peer_id, client_socket, address, message):
         if not peer_id:
             return
 
+        node_id = message.get('node_id', peer_id)
+        stale_clients = []
+
         with self.lock:
+            for existing_peer_id, peer in list(self.peers.items()):
+                if existing_peer_id != peer_id and peer.get('node_id') == node_id:
+                    stale_socket = self.clients.pop(existing_peer_id, None)
+                    self.peers.pop(existing_peer_id, None)
+
+                    if stale_socket:
+                        stale_clients.append(stale_socket)
+
             current = self.peers.get(peer_id, {})
+            connected_at = current.get('connected_at', time.time())
+            self.clients[peer_id] = client_socket
             self.peers[peer_id] = {
                 **current,
-                'node_id': message.get('node_id', peer_id),
+                'peer_id': peer_id,
+                'node_id': node_id,
+                'address': address[0] if address else current.get('address'),
+                'port': address[1] if address else current.get('port'),
+                'connected_at': connected_at,
                 'mode': message.get('mode', 'peer')
             }
+
+        for stale_socket in stale_clients:
+            self._close_socket(stale_socket)
 
         self._notify_peers_changed()
         self._notify_sync_requested(peer_id)
