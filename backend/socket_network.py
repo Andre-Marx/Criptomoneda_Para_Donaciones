@@ -4,6 +4,9 @@ import threading
 import time
 
 
+P2P_PROTOCOL_VERSION = 3
+
+
 class SocketNetwork:
     """
     Red local por sockets TCP con protocolo JSON por linea.
@@ -33,6 +36,11 @@ class SocketNetwork:
             return
 
         self.started = True
+        print(
+            f'\n -- P2P protocolo v{P2P_PROTOCOL_VERSION} iniciado en modo {self.mode} '
+            f'(codigo: {__file__})',
+            flush=True
+        )
 
         if self.mode == 'peer':
             threading.Thread(target=self._connect_to_root, daemon=True).start()
@@ -57,6 +65,7 @@ class SocketNetwork:
             'port': self.port,
             'root_host': self.root_host,
             'root_port': self.root_port,
+            'protocol_version': P2P_PROTOCOL_VERSION,
             'connected': self.mode == 'server' or root_socket is not None,
             'peer_count': len(unique_peer_ids),
             'connection_count': len(peers),
@@ -101,11 +110,7 @@ class SocketNetwork:
                 self._set_socket_timeout(root_socket, 10)
                 root_socket.connect((self.root_host, self.root_port))
 
-                self._send_line(root_socket, {
-                    'type': 'HELLO',
-                    'node_id': self.node_id,
-                    'mode': self.mode
-                })
+                self._send_line(root_socket, self._hello_payload())
                 pending_buffer = self._wait_for_hello_ack(root_socket)
                 self._set_socket_timeout(root_socket, None)
 
@@ -131,6 +136,11 @@ class SocketNetwork:
         print(f'\n -- Conexion P2P entrante desde {peer_id}; esperando HELLO...', flush=True)
 
         try:
+            self._send_line(client_socket, {
+                'type': 'HELLO_REQUEST',
+                'node_id': self.node_id,
+                'protocol_version': P2P_PROTOCOL_VERSION
+            })
             self._listen(client_socket, peer_id, address)
         finally:
             self._drop_client(peer_id, client_socket)
@@ -147,16 +157,24 @@ class SocketNetwork:
                 chunk = source_socket.recv(65536)
             except socket.timeout:
                 if peer_id and not self._is_active_peer_socket(peer_id, source_socket):
-                    print(f'\n -- No se recibio HELLO de {peer_id}; cerrando conexion P2P', flush=True)
+                    print(
+                        f'\n -- No se recibio HELLO de {peer_id}; cerrando conexion P2P. '
+                        'Verifica que el peer muestre "P2P protocolo v3" al iniciar.',
+                        flush=True
+                    )
                 break
             except OSError as e:
                 if peer_id and self._is_active_peer_socket(peer_id, source_socket):
                     print(f'\n -- Peer P2P desconectado ({peer_id}): {e}', flush=True)
+                elif peer_id:
+                    print(f'\n -- Conexion P2P cerrada antes de HELLO ({peer_id}): {e}', flush=True)
                 break
 
             if not chunk:
                 if peer_id and self._is_active_peer_socket(peer_id, source_socket):
                     print(f'\n -- Peer P2P cerro la conexion ({peer_id})', flush=True)
+                elif peer_id:
+                    print(f'\n -- Conexion P2P cerrada antes de HELLO ({peer_id})', flush=True)
                 break
 
             buffer += chunk.decode('utf-8')
@@ -175,10 +193,19 @@ class SocketNetwork:
             self._register_hello(peer_id, source_socket, address, message)
             return
 
+        if message.get('type') == 'HELLO_REQUEST':
+            if self.mode == 'peer':
+                self._send_line(source_socket, self._hello_payload())
+            return
+
         if message.get('type') == 'HELLO_ACK':
             return
 
         if self.mode == 'server' and peer_id and not self._is_active_peer_socket(peer_id, source_socket):
+            print(
+                f'\n -- Mensaje P2P ignorado antes de HELLO ({peer_id}): {message.get("type")}',
+                flush=True
+            )
             return
 
         if self.on_message:
@@ -193,8 +220,11 @@ class SocketNetwork:
 
         node_id = message.get('node_id', peer_id)
         stale_clients = []
+        already_registered = False
 
         with self.lock:
+            already_registered = self.clients.get(peer_id) is client_socket
+
             for existing_peer_id, peer in list(self.peers.items()):
                 if existing_peer_id != peer_id and peer.get('node_id') == node_id:
                     stale_socket = self.clients.pop(existing_peer_id, None)
@@ -213,20 +243,33 @@ class SocketNetwork:
                 'address': address[0] if address else current.get('address'),
                 'port': address[1] if address else current.get('port'),
                 'connected_at': connected_at,
-                'mode': message.get('mode', 'peer')
+                'mode': message.get('mode', 'peer'),
+                'protocol_version': message.get('protocol_version', 1)
             }
 
         self._set_socket_timeout(client_socket, None)
         self._send_line(client_socket, {
             'type': 'HELLO_ACK',
             'node_id': self.node_id,
-            'peer_id': peer_id
+            'peer_id': peer_id,
+            'protocol_version': P2P_PROTOCOL_VERSION
         })
 
         for stale_socket in stale_clients:
             self._close_socket(stale_socket)
 
-        print(f'\n -- Peer P2P registrado: {node_id} ({peer_id})', flush=True)
+        if already_registered:
+            print(
+                f'\n -- HELLO P2P duplicado confirmado: {node_id} ({peer_id})',
+                flush=True
+            )
+            return
+
+        print(
+            f'\n -- Peer P2P registrado: {node_id} ({peer_id}) '
+            f'protocolo v{message.get("protocol_version", 1)}',
+            flush=True
+        )
         self._notify_sync_requested(peer_id)
 
     def send_to_peer(self, peer_id, message):
@@ -283,6 +326,14 @@ class SocketNetwork:
         with write_lock:
             destination_socket.sendall(payload)
 
+    def _hello_payload(self):
+        return {
+            'type': 'HELLO',
+            'node_id': self.node_id,
+            'mode': self.mode,
+            'protocol_version': P2P_PROTOCOL_VERSION
+        }
+
     def _wait_for_hello_ack(self, root_socket):
         buffer = ''
 
@@ -303,7 +354,16 @@ class SocketNetwork:
                 message = json.loads(line)
 
                 if message.get('type') == 'HELLO_ACK':
+                    print(
+                        f'\n -- HELLO_ACK recibido del nodo raiz '
+                        f'(protocolo v{message.get("protocol_version", 1)})',
+                        flush=True
+                    )
                     return buffer
+
+                if message.get('type') == 'HELLO_REQUEST':
+                    self._send_line(root_socket, self._hello_payload())
+                    continue
 
                 raise ConnectionError(f'Respuesta P2P inesperada antes de HELLO_ACK: {message.get("type")}')
 
