@@ -98,19 +98,23 @@ class SocketNetwork:
             try:
                 root_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._enable_tcp_low_latency(root_socket)
+                self._set_socket_timeout(root_socket, 10)
                 root_socket.connect((self.root_host, self.root_port))
-
-                with self.root_lock:
-                    self.root_socket = root_socket
 
                 self._send_line(root_socket, {
                     'type': 'HELLO',
                     'node_id': self.node_id,
                     'mode': self.mode
                 })
-                print(f'\n -- Conectado al nodo raiz P2P {self.root_host}:{self.root_port}', flush=True)
-                self._listen(root_socket)
-            except OSError as e:
+                pending_buffer = self._wait_for_hello_ack(root_socket)
+                self._set_socket_timeout(root_socket, None)
+
+                with self.root_lock:
+                    self.root_socket = root_socket
+
+                print(f'\n -- Conectado y registrado en nodo raiz P2P {self.root_host}:{self.root_port}', flush=True)
+                self._listen(root_socket, initial_buffer=pending_buffer)
+            except (OSError, TimeoutError) as e:
                 print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}', flush=True)
             finally:
                 with self.root_lock:
@@ -123,6 +127,7 @@ class SocketNetwork:
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
         self._enable_tcp_low_latency(client_socket)
+        self._set_socket_timeout(client_socket, 10)
         print(f'\n -- Conexion P2P entrante desde {peer_id}; esperando HELLO...', flush=True)
 
         try:
@@ -130,12 +135,20 @@ class SocketNetwork:
         finally:
             self._drop_client(peer_id, client_socket)
 
-    def _listen(self, source_socket, peer_id=None, address=None):
-        buffer = ''
+    def _listen(self, source_socket, peer_id=None, address=None, initial_buffer=''):
+        buffer = initial_buffer
 
         while True:
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                self._handle_line(line, source_socket, peer_id, address)
+
             try:
                 chunk = source_socket.recv(65536)
+            except socket.timeout:
+                if peer_id and not self._is_active_peer_socket(peer_id, source_socket):
+                    print(f'\n -- No se recibio HELLO de {peer_id}; cerrando conexion P2P', flush=True)
+                break
             except OSError as e:
                 if peer_id and self._is_active_peer_socket(peer_id, source_socket):
                     print(f'\n -- Peer P2P desconectado ({peer_id}): {e}', flush=True)
@@ -148,29 +161,31 @@ class SocketNetwork:
 
             buffer += chunk.decode('utf-8')
 
-            while '\n' in buffer:
-                line, buffer = buffer.split('\n', 1)
-                if not line.strip():
-                    continue
+    def _handle_line(self, line, source_socket, peer_id=None, address=None):
+        if not line.strip():
+            return
 
-                try:
-                    message = json.loads(line)
-                except json.JSONDecodeError as e:
-                    print(f'\n -- Mensaje P2P invalido ignorado: {e}')
-                    continue
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError as e:
+            print(f'\n -- Mensaje P2P invalido ignorado: {e}')
+            return
 
-                if message.get('type') == 'HELLO':
-                    self._register_hello(peer_id, source_socket, address, message)
-                    continue
+        if message.get('type') == 'HELLO':
+            self._register_hello(peer_id, source_socket, address, message)
+            return
 
-                if self.mode == 'server' and peer_id and not self._is_active_peer_socket(peer_id, source_socket):
-                    continue
+        if message.get('type') == 'HELLO_ACK':
+            return
 
-                if self.on_message:
-                    self.on_message(message, peer_id=peer_id)
+        if self.mode == 'server' and peer_id and not self._is_active_peer_socket(peer_id, source_socket):
+            return
 
-                if self.mode == 'server' and message.get('type') not in ('SYNC_REQUEST', 'SYNC_STATE'):
-                    self._broadcast_to_clients(message, exclude_peer_id=peer_id)
+        if self.on_message:
+            self.on_message(message, peer_id=peer_id)
+
+        if self.mode == 'server' and message.get('type') not in ('SYNC_REQUEST', 'SYNC_STATE'):
+            self._broadcast_to_clients(message, exclude_peer_id=peer_id)
 
     def _register_hello(self, peer_id, client_socket, address, message):
         if not peer_id:
@@ -200,6 +215,13 @@ class SocketNetwork:
                 'connected_at': connected_at,
                 'mode': message.get('mode', 'peer')
             }
+
+        self._set_socket_timeout(client_socket, None)
+        self._send_line(client_socket, {
+            'type': 'HELLO_ACK',
+            'node_id': self.node_id,
+            'peer_id': peer_id
+        })
 
         for stale_socket in stale_clients:
             self._close_socket(stale_socket)
@@ -260,6 +282,30 @@ class SocketNetwork:
 
         with write_lock:
             destination_socket.sendall(payload)
+
+    def _wait_for_hello_ack(self, root_socket):
+        buffer = ''
+
+        while True:
+            chunk = root_socket.recv(65536)
+
+            if not chunk:
+                raise ConnectionError('El nodo raiz cerro la conexion antes de confirmar HELLO')
+
+            buffer += chunk.decode('utf-8')
+
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+
+                if not line.strip():
+                    continue
+
+                message = json.loads(line)
+
+                if message.get('type') == 'HELLO_ACK':
+                    return buffer
+
+                raise ConnectionError(f'Respuesta P2P inesperada antes de HELLO_ACK: {message.get("type")}')
 
     def _drop_client(self, peer_id, client_socket):
         removed = False
@@ -333,6 +379,12 @@ class SocketNetwork:
     def _enable_tcp_low_latency(self, target_socket):
         try:
             target_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
+
+    def _set_socket_timeout(self, target_socket, timeout):
+        try:
+            target_socket.settimeout(timeout)
         except OSError:
             pass
 
