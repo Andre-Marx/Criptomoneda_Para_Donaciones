@@ -97,7 +97,7 @@ class SocketNetwork:
 
             try:
                 root_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                root_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self._enable_tcp_low_latency(root_socket)
                 root_socket.connect((self.root_host, self.root_port))
 
                 with self.root_lock:
@@ -127,7 +127,7 @@ class SocketNetwork:
 
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
-        client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self._enable_tcp_low_latency(client_socket)
 
         with self.lock:
             self.clients[peer_id] = client_socket
@@ -194,6 +194,7 @@ class SocketNetwork:
             }
 
         self._notify_peers_changed()
+        self._notify_sync_requested(peer_id)
 
     def send_to_peer(self, peer_id, message):
         with self.lock:
@@ -303,6 +304,25 @@ class SocketNetwork:
             self.on_message({'type': 'PEERS_CHANGED', 'node_id': self.node_id}, peer_id=None)
         except Exception as e:
             print(f'\n -- No se pudo publicar el cambio de peers P2P: {e}')
+
+    def _notify_sync_requested(self, peer_id):
+        if self.mode != 'server' or not self.on_message:
+            return
+
+        try:
+            self.on_message({
+                'type': 'SYNC_REQUEST',
+                'node_id': peer_id,
+                'origin_node_id': peer_id
+            }, peer_id=peer_id)
+        except Exception as e:
+            print(f'\n -- No se pudo sincronizar el peer P2P ({peer_id}): {e}')
+
+    def _enable_tcp_low_latency(self, target_socket):
+        try:
+            target_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
 
 
 def get_lan_ip():

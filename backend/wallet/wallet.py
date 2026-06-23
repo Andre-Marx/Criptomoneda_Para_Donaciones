@@ -35,7 +35,7 @@ class Wallet:
         """
         Genera la firma basada en los datos y la llave privada local.
         """
-        data_hashing = hashlib.sha512(str(data).encode('utf-8')).digest()
+        data_hashing = hashlib.sha512(json.dumps(data, sort_keys=True).encode('utf-8')).digest()
         return self.private_key.sign(data_hashing).hex()
 
     def serialize_public_key(self):
@@ -77,7 +77,7 @@ class Wallet:
         """
         Verifica una firma basada en la llave pública y datos originales.
         """
-        data_hashing = hashlib.sha512(str(data).encode('utf-8')).digest()
+        data_hashing = hashlib.sha512(json.dumps(data, sort_keys=True).encode('utf-8')).digest()
 
         # Se convierte en una instancia de cryptography
         deserialized_public_key = serialization.load_pem_public_key(public_key.encode('utf-8'))

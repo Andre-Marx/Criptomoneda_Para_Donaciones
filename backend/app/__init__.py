@@ -238,10 +238,14 @@ def parse_valid_transaction(transaction_json):
 
 
 def replace_transaction_pool(transactions_json):
-    transactions = [
-        parse_valid_transaction(transaction_json)
-        for transaction_json in transactions_json
-    ]
+    transactions = []
+
+    for transaction_json in transactions_json:
+        try:
+            transactions.append(parse_valid_transaction(transaction_json))
+        except Exception as e:
+            transaction_id = transaction_json.get('id', 'sin-id') if isinstance(transaction_json, dict) else 'sin-id'
+            print(f'\n -- Transaccion remota ignorada ({transaction_id}): {e}')
 
     transaction_pool.replace_transactions(transactions)
     transaction_pool.clear_blockchain_transactions(blockchain)
@@ -854,18 +858,18 @@ def sync_with_root_node():
         root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
         result = requests.get(f'http://{root_host}:{root_port}/blockchain', timeout=2)
         result.raise_for_status()
-        #print(f'result.json(): {result.json()}')
-        print(f'Cadena Actual: {result.json()}')
+        chain_json = result.json()
+        print(f'\n -- Cadena remota recibida: {len(chain_json)} bloques')
 
-        accept_network_chain(result.json(), authoritative=True)
+        accept_network_chain(chain_json, authoritative=True)
 
         transactions_result = requests.get(f'http://{root_host}:{root_port}/transactions', timeout=2)
         transactions_result.raise_for_status()
         replace_transaction_pool(transactions_result.json())
         print('\n -- Cadena local y mempool sincronizados con éxito')
     except Exception as e:
-        #print(f'\n -- Error de sincronización: {e}')
-        print('Bienvenido a la red')
+        print(f'\n -- Sincronizacion HTTP inicial no disponible: {e}')
+        print(' -- Se intentara sincronizar por P2P al conectar con el nodo raiz.')
 
 
 def seed_data():
