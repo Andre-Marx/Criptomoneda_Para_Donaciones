@@ -5,6 +5,8 @@ import time
 
 
 P2P_PROTOCOL_VERSION = 3
+HANDSHAKE_TIMEOUT_SECONDS = 12
+HANDSHAKE_RETRY_SECONDS = 2
 
 
 class SocketNetwork:
@@ -110,6 +112,7 @@ class SocketNetwork:
                 self._set_socket_timeout(root_socket, 10)
                 root_socket.connect((self.root_host, self.root_port))
 
+                self._set_socket_timeout(root_socket, HANDSHAKE_RETRY_SECONDS)
                 self._send_line(root_socket, self._hello_payload())
                 pending_buffer = self._wait_for_hello_ack(root_socket)
                 self._set_socket_timeout(root_socket, None)
@@ -132,21 +135,18 @@ class SocketNetwork:
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
         self._enable_tcp_low_latency(client_socket)
-        self._set_socket_timeout(client_socket, 10)
+        self._set_socket_timeout(client_socket, HANDSHAKE_RETRY_SECONDS)
         print(f'\n -- Conexion P2P entrante desde {peer_id}; esperando HELLO...', flush=True)
 
         try:
-            self._send_line(client_socket, {
-                'type': 'HELLO_REQUEST',
-                'node_id': self.node_id,
-                'protocol_version': P2P_PROTOCOL_VERSION
-            })
             self._listen(client_socket, peer_id, address)
         finally:
             self._drop_client(peer_id, client_socket)
 
     def _listen(self, source_socket, peer_id=None, address=None, initial_buffer=''):
         buffer = initial_buffer
+        handshake_deadline = time.time() + HANDSHAKE_TIMEOUT_SECONDS if peer_id else None
+        last_hello_request_at = 0
 
         while True:
             while '\n' in buffer:
@@ -157,9 +157,34 @@ class SocketNetwork:
                 chunk = source_socket.recv(65536)
             except socket.timeout:
                 if peer_id and not self._is_active_peer_socket(peer_id, source_socket):
+                    now = time.time()
+
+                    if now >= handshake_deadline:
+                        print(
+                            f'\n -- No se recibio HELLO de {peer_id}; cerrando conexion P2P. '
+                            'Verifica que el peer muestre "P2P protocolo v3" al iniciar.',
+                            flush=True
+                        )
+                        break
+
+                    if now - last_hello_request_at >= HANDSHAKE_RETRY_SECONDS:
+                        last_hello_request_at = now
+                        try:
+                            self._send_line(source_socket, {
+                                'type': 'HELLO_REQUEST',
+                                'node_id': self.node_id,
+                                'protocol_version': P2P_PROTOCOL_VERSION
+                            })
+                            print(f'\n -- HELLO_REQUEST enviado a {peer_id}', flush=True)
+                        except OSError as e:
+                            print(f'\n -- No se pudo pedir HELLO a {peer_id}: {e}', flush=True)
+                            break
+
+                    continue
+
+                if peer_id:
                     print(
-                        f'\n -- No se recibio HELLO de {peer_id}; cerrando conexion P2P. '
-                        'Verifica que el peer muestre "P2P protocolo v3" al iniciar.',
+                        f'\n -- Timeout de lectura P2P con {peer_id}; cerrando conexion',
                         flush=True
                     )
                 break
@@ -336,9 +361,18 @@ class SocketNetwork:
 
     def _wait_for_hello_ack(self, root_socket):
         buffer = ''
+        deadline = time.time() + HANDSHAKE_TIMEOUT_SECONDS
 
         while True:
-            chunk = root_socket.recv(65536)
+            try:
+                chunk = root_socket.recv(65536)
+            except socket.timeout:
+                if time.time() >= deadline:
+                    raise TimeoutError('El nodo raiz no confirmo HELLO dentro del tiempo esperado')
+
+                self._send_line(root_socket, self._hello_payload())
+                print('\n -- Reintentando HELLO con el nodo raiz P2P...', flush=True)
+                continue
 
             if not chunk:
                 raise ConnectionError('El nodo raiz cerro la conexion antes de confirmar HELLO')

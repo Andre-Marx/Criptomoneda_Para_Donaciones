@@ -9,6 +9,7 @@ import uuid
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from werkzeug.serving import WSGIRequestHandler
 
 from backend.blockchain.block import Block
 from backend.blockchain.blockchain import Blockchain
@@ -17,6 +18,14 @@ from backend.wallet.wallet import Wallet
 from backend.wallet.transaction import Transaction
 from backend.wallet.transaction_pool import TransactionPool
 from backend.socket_network import SocketNetwork, get_lan_ip
+
+
+class QuietWSGIRequestHandler(WSGIRequestHandler):
+    def handle(self):
+        try:
+            super().handle()
+        except OSError as e:
+            print(f'\n -- Conexion HTTP cerrada por el cliente antes de completar la solicitud: {e}', flush=True)
 
 
 # Nombre de la aplicación
@@ -872,23 +881,34 @@ PORT = int(os.environ.get('PORT', ROOT_PORT))
 
 
 def sync_with_root_node():
-    try:
-        root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
-        root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
-        result = requests.get(f'http://{root_host}:{root_port}/blockchain', timeout=2)
-        result.raise_for_status()
-        chain_json = result.json()
-        print(f'\n -- Cadena remota recibida: {len(chain_json)} bloques')
+    root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
+    root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
+    root_url = f'http://{root_host}:{root_port}'
+    headers = {'Connection': 'close'}
+    last_error = None
 
-        accept_network_chain(chain_json, authoritative=True)
+    for attempt in range(1, 4):
+        try:
+            result = requests.get(f'{root_url}/blockchain', headers=headers, timeout=5)
+            result.raise_for_status()
+            chain_json = result.json()
+            print(f'\n -- Cadena remota recibida por HTTP: {len(chain_json)} bloques')
 
-        transactions_result = requests.get(f'http://{root_host}:{root_port}/transactions', timeout=2)
-        transactions_result.raise_for_status()
-        replace_transaction_pool(transactions_result.json())
-        print('\n -- Cadena local y mempool sincronizados con éxito')
-    except Exception as e:
-        print(f'\n -- Sincronizacion HTTP inicial no disponible: {e}')
-        print(' -- Se intentara sincronizar por P2P al conectar con el nodo raiz.')
+            accept_network_chain(chain_json, authoritative=True)
+
+            transactions_result = requests.get(f'{root_url}/transactions', headers=headers, timeout=5)
+            transactions_result.raise_for_status()
+            replace_transaction_pool(transactions_result.json())
+            print('\n -- Cadena local y mempool sincronizados por HTTP')
+            return True
+        except Exception as e:
+            last_error = e
+            print(f'\n -- Sincronizacion HTTP inicial intento {attempt}/3 fallida: {e}', flush=True)
+            time.sleep(1)
+
+    print(f'\n -- Sincronizacion HTTP inicial no disponible: {last_error}', flush=True)
+    print(' -- Se intentara sincronizar por P2P al conectar con el nodo raiz.', flush=True)
+    return False
 
 
 def seed_data():
@@ -926,8 +946,6 @@ def main():
         if os.environ.get('PORT') is None:
             port = random.randint(5001, 6000)
 
-        sync_with_root_node()
-
     os.environ['PORT'] = str(port)
 
     should_seed_root = (
@@ -940,7 +958,15 @@ def main():
 
     get_network()
 
-    app.run(host=os.environ.get('HOST', '0.0.0.0'), port=port, threaded=True)
+    if mode == 'peer':
+        threading.Thread(target=sync_with_root_node, daemon=True).start()
+
+    app.run(
+        host=os.environ.get('HOST', '0.0.0.0'),
+        port=port,
+        threaded=True,
+        request_handler=QuietWSGIRequestHandler
+    )
 
 
 if __name__ == '__main__':
