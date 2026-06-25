@@ -14,6 +14,7 @@ from werkzeug.serving import WSGIRequestHandler
 from backend.blockchain.block import Block
 from backend.blockchain.blockchain import Blockchain
 from backend.config import MINING_REWARD, P2P_MINING_DIFFICULTY, P2P_ROOT_HOST, P2P_ROOT_PORT, P2P_SOCKET_PORT
+from backend.cloud_network import CloudNetwork
 from backend.wallet.wallet import Wallet
 from backend.wallet.transaction import Transaction
 from backend.wallet.transaction_pool import TransactionPool
@@ -149,6 +150,10 @@ def get_p2p_mode():
     return os.environ.get('P2P_MODE', 'server').lower()
 
 
+def get_p2p_transport():
+    return os.environ.get('P2P_TRANSPORT', 'socket').lower()
+
+
 def env_int(name, default):
     try:
         return int(os.environ.get(name, default))
@@ -159,13 +164,16 @@ def env_int(name, default):
 def get_root_http_host():
     root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
 
-    if get_p2p_mode() == 'peer':
+    if get_p2p_mode() == 'peer' and get_p2p_transport() == 'socket':
         return normalize_local_host(root_host)
 
     return root_host
 
 
 def get_root_http_url_candidates():
+    if get_p2p_transport() == 'pubnub':
+        return []
+
     root_host = get_root_http_host()
     configured_http_port = os.environ.get('ROOT_HTTP_PORT')
     p2p_root_port = env_int('P2P_ROOT_PORT', P2P_ROOT_PORT)
@@ -198,18 +206,21 @@ def get_root_http_url_candidates():
 
 
 def get_root_http_url():
-    return get_root_http_url_candidates()[0]
+    candidates = get_root_http_url_candidates()
+    return candidates[0] if candidates else None
 
 
 def print_startup_network_summary(mode, port):
     host = os.environ.get('HOST', '0.0.0.0')
     lan_ips = get_lan_ip_candidates()
     p2p_port = P2P_SOCKET_PORT if mode == 'server' else env_int('P2P_ROOT_PORT', P2P_ROOT_PORT)
+    transport = get_p2p_transport()
 
     print(
         f'\n -- Nodo {mode} listo para iniciar (node_id: {NODE_ID})',
         flush=True
     )
+    print(f' -- Transporte P2P: {transport}', flush=True)
     print(f' -- HTTP escuchara en {host}:{port}', flush=True)
 
     for lan_ip in lan_ips:
@@ -241,7 +252,17 @@ def print_startup_network_summary(mode, port):
             flush=True
         )
 
-    if mode == 'server':
+    if transport == 'pubnub':
+        print(
+            ' -- PubNub evita conexiones entrantes LAN: ambos nodos se comunican '
+            'con conexiones salientes al canal compartido.',
+            flush=True
+        )
+        print(
+            ' -- Usa el mismo P2P_CLOUD_CHANNEL en todos los nodos de la demo.',
+            flush=True
+        )
+    elif mode == 'server':
         p2p_host = os.environ.get('P2P_SOCKET_HOST', '0.0.0.0')
         print(f' -- P2P escuchara en {p2p_host}:{P2P_SOCKET_PORT}', flush=True)
 
@@ -254,7 +275,7 @@ def print_startup_network_summary(mode, port):
                 'python3 -m backend.app',
                 flush=True
             )
-    else:
+    elif mode == 'peer':
         original_http_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
         if host_is_local_machine(original_http_host):
             print(
@@ -312,6 +333,9 @@ def get_root_network_status():
     if get_p2p_mode() != 'peer':
         return None
 
+    if get_p2p_transport() == 'pubnub':
+        return None
+
     with root_network_status_lock:
         cached_status = dict(root_network_status_cache)
 
@@ -338,15 +362,23 @@ def get_network():
     global p2p_network
 
     if p2p_network is None:
-        p2p_network = SocketNetwork(
-            NODE_ID,
-            on_message=handle_network_message,
-            mode=get_p2p_mode(),
-            host=os.environ.get('P2P_SOCKET_HOST', '0.0.0.0'),
-            port=P2P_SOCKET_PORT,
-            root_host=os.environ.get('P2P_ROOT_HOST', P2P_ROOT_HOST),
-            root_port=int(os.environ.get('P2P_ROOT_PORT', P2P_ROOT_PORT))
-        )
+        if get_p2p_transport() == 'pubnub':
+            p2p_network = CloudNetwork(
+                NODE_ID,
+                on_message=handle_network_message,
+                mode=get_p2p_mode(),
+                channel=os.environ.get('P2P_CLOUD_CHANNEL', 'hopecoin-p2p-v3')
+            )
+        else:
+            p2p_network = SocketNetwork(
+                NODE_ID,
+                on_message=handle_network_message,
+                mode=get_p2p_mode(),
+                host=os.environ.get('P2P_SOCKET_HOST', '0.0.0.0'),
+                port=P2P_SOCKET_PORT,
+                root_host=os.environ.get('P2P_ROOT_HOST', P2P_ROOT_HOST),
+                root_port=int(os.environ.get('P2P_ROOT_PORT', P2P_ROOT_PORT))
+            )
         p2p_network.start()
 
     return p2p_network
@@ -372,6 +404,7 @@ def passive_network_status_snapshot():
         return {
             'node_id': NODE_ID,
             'mode': get_p2p_mode(),
+            'transport': get_p2p_transport(),
             'host': os.environ.get('P2P_SOCKET_HOST', '0.0.0.0'),
             'port': P2P_SOCKET_PORT,
             'root_host': os.environ.get('P2P_ROOT_HOST', P2P_ROOT_HOST),
@@ -1104,6 +1137,14 @@ def route_transactions_test():
     return jsonify(transaction_pool.transaction_data())
 
 def sync_with_root_node():
+    if get_p2p_transport() == 'pubnub':
+        print(
+            '\n -- Sincronizacion HTTP inicial omitida: transporte PubNub activo. '
+            'El peer solicitara SYNC_STATE por PubNub.',
+            flush=True
+        )
+        return False
+
     headers = {'Connection': 'close'}
     last_error = None
     root_urls = get_root_http_url_candidates()

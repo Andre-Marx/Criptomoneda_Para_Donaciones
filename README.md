@@ -105,6 +105,20 @@ HOST=0.0.0.0 PORT=3000 REACT_APP_API_BASE_URL=http://localhost:5050 npm start
 HOST=0.0.0.0 PORT=5051 P2P_MODE=peer P2P_ROOT_HOST=TU_IP_LOCAL_DEL_SERVIDOR P2P_ROOT_PORT=17000 ROOT_HTTP_HOST=TU_IP_LOCAL_DEL_SERVIDOR ROOT_HTTP_PORT=5050 P2P_MINING_DIFFICULTY=20 python3 -m backend.app
 ```
 
+**Modo alterno si macOS/firewall bloquea la LAN**
+
+Si desde la computadora peer `curl http://TU_IP_LOCAL:5050/health` devuelve `Connection reset by peer`, el sistema esta cortando conexiones entrantes hacia Python en el nodo raiz. Para la demo usa el transporte PubNub, que no requiere conexiones entrantes LAN porque ambos nodos abren conexiones salientes a internet. Usa el mismo `P2P_CLOUD_CHANNEL` en todos los nodos:
+
+Nodo raiz:
+```
+HOST=0.0.0.0 PORT=5050 P2P_MODE=server P2P_TRANSPORT=pubnub P2P_CLOUD_CHANNEL=hopecoin-clase python3 -m backend.app
+```
+
+Nodo peer:
+```
+HOST=0.0.0.0 PORT=5051 P2P_MODE=peer P2P_TRANSPORT=pubnub P2P_CLOUD_CHANNEL=hopecoin-clase python3 -m backend.app
+```
+
 5. En cada computadora participante, iniciar su UI apuntando a su propio backend:
 ```
 cd frontend_ui
