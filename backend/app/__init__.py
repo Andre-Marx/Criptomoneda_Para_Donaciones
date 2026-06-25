@@ -46,8 +46,9 @@ mining_stop_event = threading.Event()
 root_network_status_lock = threading.Lock()
 root_network_status_cache = {}
 ROOT_NETWORK_STATUS_CACHE_TTL = 30
-ROOT_PORT = 5000
+ROOT_PORT = 5050
 PORT = int(os.environ.get('PORT', ROOT_PORT))
+MACOS_PROBLEMATIC_DEMO_PORTS = {5000, 7000}
 os.environ.setdefault('P2P_ALLOW_DIFFICULTY_JUMP', 'True')
 
 NODE_ID = os.environ.get('NODE_ID', f'{socket.gethostname()}-{str(uuid.uuid4())[:6]}')
@@ -198,6 +199,7 @@ def get_root_http_url():
 def print_startup_network_summary(mode, port):
     host = os.environ.get('HOST', '0.0.0.0')
     lan_ips = get_lan_ip_candidates()
+    p2p_port = P2P_SOCKET_PORT if mode == 'server' else env_int('P2P_ROOT_PORT', P2P_ROOT_PORT)
 
     print(
         f'\n -- Nodo {mode} listo para iniciar (node_id: {NODE_ID})',
@@ -215,6 +217,14 @@ def print_startup_network_summary(mode, port):
             flush=True
         )
 
+    if port in MACOS_PROBLEMATIC_DEMO_PORTS or p2p_port in MACOS_PROBLEMATIC_DEMO_PORTS:
+        print(
+            ' -- ADVERTENCIA: estas usando puerto 5000 o 7000. En macOS pueden chocar '
+            'con AirPlay/servicios del sistema o reglas de firewall. Para la demo usa '
+            f'PORT={ROOT_PORT} y P2P_ROOT_PORT/P2P_SOCKET_PORT={P2P_SOCKET_PORT}.',
+            flush=True
+        )
+
     if mode == 'server':
         p2p_host = os.environ.get('P2P_SOCKET_HOST', '0.0.0.0')
         print(f' -- P2P escuchara en {p2p_host}:{P2P_SOCKET_PORT}', flush=True)
@@ -222,7 +232,7 @@ def print_startup_network_summary(mode, port):
         for lan_ip in lan_ips:
             print(
                 ' -- Comando peer sugerido: '
-                f'HOST=0.0.0.0 PORT=5001 P2P_MODE=peer '
+                f'HOST=0.0.0.0 PORT=5051 P2P_MODE=peer '
                 f'P2P_ROOT_HOST={lan_ip} P2P_ROOT_PORT={P2P_SOCKET_PORT} '
                 f'ROOT_HTTP_HOST={lan_ip} ROOT_HTTP_PORT={port} '
                 'python3 -m backend.app',
@@ -823,7 +833,7 @@ def route_blockchain():
 
 @app.route('/blockchain/range')
 def route_blockchain_range():
-    # http://localhost:5000/blockchain/range?start=3&end=6
+    # http://localhost:5050/blockchain/range?start=3&end=6
     start = int(request.args.get('start'))
     end = int(request.args.get('end'))
 
@@ -943,7 +953,7 @@ def route_network_diagnostics():
     if mode == 'server':
         diagnostics['peer_command_examples'] = [
             (
-                f'HOST=0.0.0.0 PORT=5001 P2P_MODE=peer '
+                f'HOST=0.0.0.0 PORT=5051 P2P_MODE=peer '
                 f'P2P_ROOT_HOST={lan_ip} P2P_ROOT_PORT={P2P_SOCKET_PORT} '
                 f'ROOT_HTTP_HOST={lan_ip} ROOT_HTTP_PORT={api_port} '
                 'python3 -m backend.app'
@@ -1139,7 +1149,7 @@ def main():
 
     if mode == 'peer':
         if os.environ.get('PORT') is None:
-            port = random.randint(5001, 6000)
+            port = random.randint(5051, 6099)
 
     os.environ['PORT'] = str(port)
 

@@ -10,6 +10,8 @@ P2P_PROTOCOL_VERSION = 3
 HANDSHAKE_TIMEOUT_SECONDS = 12
 HANDSHAKE_RETRY_SECONDS = 2
 HTTP_METHODS = ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS')
+DEFAULT_HTTP_PORT = 5050
+DEFAULT_P2P_PORT = 17000
 
 
 class SocketNetwork:
@@ -18,7 +20,7 @@ class SocketNetwork:
     El nodo servidor actua como punto de encuentro para los peers de la red WiFi.
     """
 
-    def __init__(self, node_id, on_message=None, mode='server', host='0.0.0.0', port=7000, root_host='127.0.0.1', root_port=7000):
+    def __init__(self, node_id, on_message=None, mode='server', host='0.0.0.0', port=DEFAULT_P2P_PORT, root_host='127.0.0.1', root_port=DEFAULT_P2P_PORT):
         self.node_id = node_id
         self.on_message = on_message
         self.mode = mode
@@ -397,7 +399,7 @@ class SocketNetwork:
                     self._send_wrong_port_http_response(source_socket)
                     print(
                         f'\n -- Solicitud HTTP recibida en el puerto P2P desde {peer_id}. '
-                        'Usa el puerto HTTP del nodo raiz (por defecto 5000), no P2P_ROOT_PORT.',
+                        f'Usa el puerto HTTP del nodo raiz (por defecto {DEFAULT_HTTP_PORT}), no P2P_ROOT_PORT.',
                         flush=True
                     )
                 else:
@@ -577,7 +579,7 @@ class SocketNetwork:
     def _send_wrong_port_http_response(self, destination_socket):
         body = (
             'Este puerto es para P2P. Usa el puerto HTTP del backend '
-            'del nodo raiz, normalmente 5000.\n'
+            f'del nodo raiz, normalmente {DEFAULT_HTTP_PORT}.\n'
         ).encode('utf-8')
         response = (
             'HTTP/1.1 400 Bad Request\r\n'
