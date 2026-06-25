@@ -130,6 +130,11 @@ cd frontend_ui
 HOST=0.0.0.0 PORT=3001 REACT_APP_API_BASE_URL=http://localhost:5051 npm start
 ```
 
+Si el estado de la blockchain o del mempool es grande, el backend puede mostrar logs como
+`PubNub enviara SYNC_STATE en N partes` y el peer luego mostrara
+`PubNub rearma SYNC_STATE`. Es normal: el mensaje se comprime y se divide para evitar
+el error `Request URI Too Long` de PubNub.
+
 5. En cada computadora participante, iniciar su UI apuntando a su propio backend:
 ```
 cd frontend_ui
