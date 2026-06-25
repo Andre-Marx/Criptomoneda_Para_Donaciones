@@ -25,7 +25,11 @@ class QuietWSGIRequestHandler(WSGIRequestHandler):
         try:
             super().handle()
         except OSError as e:
-            print(f'\n -- Conexion HTTP cerrada por el cliente antes de completar la solicitud: {e}', flush=True)
+            print(
+                '\n -- Conexion HTTP cerrada por el cliente antes de completar la solicitud '
+                f'desde {getattr(self, "client_address", "desconocido")}: {e}',
+                flush=True
+            )
 
 
 # Nombre de la aplicación
@@ -251,6 +255,15 @@ def print_root_http_preflight(root_urls):
                 f'\n -- Preflight HTTP raiz fallo contra {root_url}/health: {e}',
                 flush=True
             )
+            if isinstance(e, requests.exceptions.ConnectionError):
+                print(
+                    ' -- Diagnostico HTTP: el puerto HTTP acepto o intento aceptar TCP, '
+                    'pero la conexion se corto antes de recibir una respuesta Flask. '
+                    'Si el root imprime una conexion HTTP cerrada desde la IP del peer, '
+                    'el problema esta por debajo de Flask: firewall, permisos de Python, VPN '
+                    'o red local cerrando la sesion.',
+                    flush=True
+                )
 
     print(
         ' -- Si el nodo raiz no muestra un GET /health desde este equipo, '

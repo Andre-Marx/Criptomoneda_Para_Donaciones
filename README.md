@@ -77,6 +77,7 @@ Si `localhost` responde pero `TU_IP_LOCAL` no, la IP elegida no es la correcta o
 
 Si el peer muestra `Connection reset by peer` pero en la terminal del nodo raiz no aparece ningun `GET /health`, `GET /blockchain` o `Conexion P2P entrante` desde la IP del peer, la conexion no esta llegando al backend raiz. En ese caso revisa estos puntos antes de seguir con el minado:
 - El nodo raiz debe imprimirse como `HTTP escuchara en 0.0.0.0:5000` y `P2P escuchara en 0.0.0.0:7000`.
+- El nodo raiz debe mostrar `Autoprueba P2P local OK`. Eso confirma que el proceso Python si acepta sockets P2P localmente.
 - Usa la IP LAN que imprime el nodo raiz en `URL HTTP LAN`, no `127.0.0.1` ni una IP de otra interfaz.
 - En macOS, acepta las conexiones entrantes para Python o desactiva temporalmente el firewall para la prueba.
 - Desde la computadora peer, prueba `curl http://IP_RAIZ:5000/health`. Si eso falla, P2P tambien fallara porque el problema esta en red/IP/firewall, no en la blockchain.

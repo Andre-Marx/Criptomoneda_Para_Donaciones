@@ -1,5 +1,6 @@
 import json
 import ipaddress
+import os
 import socket
 import threading
 import time
@@ -34,6 +35,10 @@ class SocketNetwork:
         self.write_locks = {}
         self.write_locks_lock = threading.Lock()
         self.started = False
+        self.self_check = {
+            'status': 'not_run',
+            'message': 'Autoprueba P2P local no ejecutada.'
+        }
 
     def start(self):
         if self.started:
@@ -73,7 +78,8 @@ class SocketNetwork:
             'connected': self.mode == 'server' or root_socket is not None,
             'peer_count': len(unique_peer_ids),
             'connection_count': len(peers),
-            'peers': peers
+            'peers': peers,
+            'self_check': dict(self.self_check)
         }
 
     def broadcast(self, message):
@@ -96,6 +102,8 @@ class SocketNetwork:
         self.server_socket.listen(8)
         print(f'\n -- Red P2P escuchando en {self.host}:{self.port}', flush=True)
         threading.Thread(target=self._print_peer_connection_hint, daemon=True).start()
+        if os.environ.get('P2P_SELF_TEST', 'True') == 'True':
+            threading.Thread(target=self._run_server_self_check, daemon=True).start()
 
         while True:
             try:
@@ -141,6 +149,13 @@ class SocketNetwork:
                 self._listen(root_socket, initial_buffer=pending_buffer)
             except (OSError, TimeoutError) as e:
                 print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}', flush=True)
+                if self._is_connection_reset(e):
+                    print(
+                        ' -- El TCP alcanzo el destino, pero se reinicio antes de recibir HELLO_ACK. '
+                        'Si el root tampoco recibio HELLO, normalmente es firewall, antivirus, VPN '
+                        'o una regla de red cerrando sockets externos hacia Python.',
+                        flush=True
+                    )
                 print(
                     ' -- Si el nodo raiz no muestra "Conexion P2P entrante", '
                     'esta conexion no esta llegando a ese proceso. Revisa IP, HOST=0.0.0.0 '
@@ -162,11 +177,56 @@ class SocketNetwork:
             flush=True
         )
 
+    def _run_server_self_check(self):
+        time.sleep(0.2)
+        target_host = '127.0.0.1' if self.host in ('0.0.0.0', '') else self.host
+        probe_socket = None
+
+        try:
+            self.self_check = {
+                'status': 'running',
+                'target': f'{target_host}:{self.port}',
+                'message': 'Probando socket P2P local.'
+            }
+            probe_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._set_socket_timeout(probe_socket, 3)
+            probe_socket.connect((target_host, self.port))
+            self._send_line(probe_socket, {
+                'type': 'PING',
+                'node_id': self.node_id,
+                'probe': 'server-self-check',
+                'protocol_version': P2P_PROTOCOL_VERSION
+            })
+            response = self._recv_json_line(probe_socket)
+
+            if response.get('type') != 'PONG':
+                raise ConnectionError(f'Respuesta inesperada en autoprueba P2P: {response.get("type")}')
+
+            self.self_check = {
+                'status': 'ok',
+                'target': f'{target_host}:{self.port}',
+                'message': 'Autoprueba P2P local OK: el proceso acepta sockets y responde PING/PONG.'
+            }
+            print(f'\n -- {self.self_check["message"]}', flush=True)
+        except Exception as e:
+            self.self_check = {
+                'status': 'failed',
+                'target': f'{target_host}:{self.port}',
+                'message': f'Autoprueba P2P local fallo: {e}'
+            }
+            print(f'\n -- {self.self_check["message"]}', flush=True)
+        finally:
+            self._close_socket(probe_socket)
+
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
         self._enable_tcp_low_latency(client_socket)
         self._set_socket_timeout(client_socket, HANDSHAKE_RETRY_SECONDS)
-        print(f'\n -- Conexion P2P entrante desde {peer_id}; esperando HELLO...', flush=True)
+        print(
+            f'\n -- Conexion P2P entrante desde {peer_id}; '
+            f'socket local {self._safe_socket_name(client_socket)}; esperando HELLO...',
+            flush=True
+        )
 
         try:
             self._listen(client_socket, peer_id, address)
@@ -223,9 +283,24 @@ class SocketNetwork:
                 break
             except OSError as e:
                 if peer_id and self._is_active_peer_socket(peer_id, source_socket):
-                    print(f'\n -- Peer P2P desconectado ({peer_id}): {e}', flush=True)
+                    print(
+                        f'\n -- Peer P2P desconectado ({peer_id}): '
+                        f'{self._format_socket_error(e)}',
+                        flush=True
+                    )
                 elif peer_id:
-                    print(f'\n -- Conexion P2P cerrada antes de HELLO ({peer_id}): {e}', flush=True)
+                    print(
+                        f'\n -- Conexion P2P cerrada antes de HELLO ({peer_id}): '
+                        f'{self._format_socket_error(e)}. No se recibio ningun byte del peer.',
+                        flush=True
+                    )
+                    if self._is_connection_reset(e):
+                        print(
+                            ' -- Diagnostico P2P: el TCP entro al root, pero fue reiniciado antes '
+                            'del HELLO. Si la autoprueba local dice OK, revisa firewall/VPN/reglas '
+                            'de red entre las computadoras.',
+                            flush=True
+                        )
                 break
 
             if not chunk:
@@ -262,6 +337,17 @@ class SocketNetwork:
 
         if message.get('type') == 'HELLO':
             self._register_hello(peer_id, source_socket, address, message)
+            return True
+
+        if message.get('type') == 'PING':
+            self._send_line(source_socket, {
+                'type': 'PONG',
+                'node_id': self.node_id,
+                'protocol_version': P2P_PROTOCOL_VERSION
+            })
+            if peer_id and not self._is_active_peer_socket(peer_id, source_socket):
+                print(f'\n -- Probe P2P PING/PONG atendido para {peer_id}', flush=True)
+                return False
             return True
 
         if message.get('type') == 'HELLO_REQUEST':
@@ -399,6 +485,18 @@ class SocketNetwork:
         with write_lock:
             destination_socket.sendall(payload)
 
+    def _recv_json_line(self, source_socket):
+        buffer = ''
+
+        while '\n' not in buffer:
+            chunk = source_socket.recv(65536)
+            if not chunk:
+                raise ConnectionError('socket cerrado antes de recibir respuesta')
+            buffer += chunk.decode('utf-8')
+
+        line, _ = buffer.split('\n', 1)
+        return json.loads(line)
+
     def _looks_like_http_request(self, line):
         stripped_line = line.lstrip()
         return any(stripped_line.startswith(f'{method} ') for method in HTTP_METHODS)
@@ -443,6 +541,17 @@ class SocketNetwork:
                 self._send_line(root_socket, self._hello_payload())
                 print('\n -- Reintentando HELLO con el nodo raiz P2P...', flush=True)
                 continue
+            except OSError as e:
+                if self._is_connection_reset(e):
+                    raise ConnectionResetError(
+                        getattr(e, 'errno', 54),
+                        'El nodo raiz reinicio la conexion antes de HELLO_ACK'
+                    )
+
+                raise ConnectionError(
+                    'Error de socket antes de HELLO_ACK '
+                    f'({self._format_socket_error(e)})'
+                )
 
             if not chunk:
                 raise ConnectionError('El nodo raiz cerro la conexion antes de confirmar HELLO')
@@ -551,6 +660,23 @@ class SocketNetwork:
             target_socket.settimeout(timeout)
         except OSError:
             pass
+
+    def _safe_socket_name(self, target_socket):
+        try:
+            return target_socket.getsockname()
+        except OSError:
+            return 'desconocido'
+
+    def _format_socket_error(self, error):
+        error_number = getattr(error, 'errno', None)
+        if error_number is None:
+            return str(error)
+
+        return f'[Errno {error_number}] {error.strerror or error}'
+
+    def _is_connection_reset(self, error):
+        error_number = getattr(error, 'errno', None)
+        return error_number in (54, 57, 104)
 
 
 def get_lan_ip_candidates():
