@@ -1,4 +1,5 @@
 import json
+import ipaddress
 import socket
 import threading
 import time
@@ -94,6 +95,7 @@ class SocketNetwork:
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(8)
         print(f'\n -- Red P2P escuchando en {self.host}:{self.port}', flush=True)
+        threading.Thread(target=self._print_peer_connection_hint, daemon=True).start()
 
         while True:
             try:
@@ -104,14 +106,27 @@ class SocketNetwork:
                 break
 
     def _connect_to_root(self):
+        attempt = 0
+
         while True:
             root_socket = None
+            attempt += 1
 
             try:
+                print(
+                    f'\n -- Intentando conexion P2P #{attempt} con '
+                    f'{self.root_host}:{self.root_port}...',
+                    flush=True
+                )
                 root_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._enable_tcp_low_latency(root_socket)
                 self._set_socket_timeout(root_socket, 10)
                 root_socket.connect((self.root_host, self.root_port))
+                print(
+                    f'\n -- TCP P2P abierto desde {root_socket.getsockname()} '
+                    f'hacia {self.root_host}:{self.root_port}; enviando HELLO...',
+                    flush=True
+                )
 
                 self._set_socket_timeout(root_socket, HANDSHAKE_RETRY_SECONDS)
                 self._send_line(root_socket, self._hello_payload())
@@ -122,16 +137,30 @@ class SocketNetwork:
                     self.root_socket = root_socket
 
                 print(f'\n -- Conectado y registrado en nodo raiz P2P {self.root_host}:{self.root_port}', flush=True)
+                attempt = 0
                 self._listen(root_socket, initial_buffer=pending_buffer)
             except (OSError, TimeoutError) as e:
                 print(f'\n -- No se pudo conectar al nodo raiz P2P: {e}', flush=True)
+                print(
+                    ' -- Si el nodo raiz no muestra "Conexion P2P entrante", '
+                    'esta conexion no esta llegando a ese proceso. Revisa IP, HOST=0.0.0.0 '
+                    'y permisos de firewall para Python.',
+                    flush=True
+                )
             finally:
                 with self.root_lock:
                     if self.root_socket is root_socket:
                         self.root_socket = None
 
                 self._close_socket(root_socket)
-                time.sleep(3)
+                time.sleep(min(30, 3 + attempt))
+
+    def _print_peer_connection_hint(self):
+        print(
+            '\n -- Para peers en la misma WiFi usa: '
+            f'P2P_ROOT_HOST={get_lan_ip()} P2P_ROOT_PORT={self.port}',
+            flush=True
+        )
 
     def _handle_client(self, client_socket, address):
         peer_id = f'{address[0]}:{address[1]}'
@@ -524,12 +553,55 @@ class SocketNetwork:
             pass
 
 
+def get_lan_ip_candidates():
+    candidates = []
+
+    def add_candidate(ip):
+        if ip and not ip.startswith('127.') and ip not in candidates:
+            candidates.append(ip)
+
+    for target in ('8.8.8.8', '1.1.1.1', '192.168.100.1', '192.168.1.1'):
+        probe = None
+
+        try:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.connect((target, 80))
+            add_candidate(probe.getsockname()[0])
+        except OSError:
+            pass
+        finally:
+            if probe:
+                probe.close()
+
+    if not candidates:
+        candidates.append('127.0.0.1')
+
+    return sorted(candidates, key=_lan_ip_priority)
+
+
 def get_lan_ip():
+    return get_lan_ip_candidates()[0]
+
+
+def _lan_ip_priority(ip):
     try:
-        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        probe.connect(('8.8.8.8', 80))
-        ip = probe.getsockname()[0]
-        probe.close()
-        return ip
-    except OSError:
-        return '127.0.0.1'
+        parsed_ip = ipaddress.ip_address(ip)
+    except ValueError:
+        return (9, ip)
+
+    if parsed_ip.is_loopback:
+        return (8, ip)
+
+    if ip.startswith('192.168.'):
+        return (0, ip)
+
+    if ip.startswith('10.'):
+        return (1, ip)
+
+    if parsed_ip in ipaddress.ip_network('172.16.0.0/12'):
+        return (2, ip)
+
+    if parsed_ip in ipaddress.ip_network('100.64.0.0/10'):
+        return (6, ip)
+
+    return (5, ip)

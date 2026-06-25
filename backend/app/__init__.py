@@ -17,7 +17,7 @@ from backend.config import MINING_REWARD, P2P_MINING_DIFFICULTY, P2P_ROOT_HOST, 
 from backend.wallet.wallet import Wallet
 from backend.wallet.transaction import Transaction
 from backend.wallet.transaction_pool import TransactionPool
-from backend.socket_network import SocketNetwork, get_lan_ip
+from backend.socket_network import SocketNetwork, get_lan_ip, get_lan_ip_candidates
 
 
 class QuietWSGIRequestHandler(WSGIRequestHandler):
@@ -191,6 +191,77 @@ def get_root_http_url():
     return get_root_http_url_candidates()[0]
 
 
+def print_startup_network_summary(mode, port):
+    host = os.environ.get('HOST', '0.0.0.0')
+    lan_ips = get_lan_ip_candidates()
+
+    print(
+        f'\n -- Nodo {mode} listo para iniciar (node_id: {NODE_ID})',
+        flush=True
+    )
+    print(f' -- HTTP escuchara en {host}:{port}', flush=True)
+
+    for lan_ip in lan_ips:
+        print(f' -- URL HTTP LAN: http://{lan_ip}:{port}', flush=True)
+
+    if host in ('127.0.0.1', 'localhost'):
+        print(
+            ' -- ADVERTENCIA: HOST esta limitado a localhost; otros equipos no podran '
+            'entrar. Usa HOST=0.0.0.0.',
+            flush=True
+        )
+
+    if mode == 'server':
+        p2p_host = os.environ.get('P2P_SOCKET_HOST', '0.0.0.0')
+        print(f' -- P2P escuchara en {p2p_host}:{P2P_SOCKET_PORT}', flush=True)
+
+        for lan_ip in lan_ips:
+            print(
+                ' -- Comando peer sugerido: '
+                f'HOST=0.0.0.0 PORT=5001 P2P_MODE=peer '
+                f'P2P_ROOT_HOST={lan_ip} P2P_ROOT_PORT={P2P_SOCKET_PORT} '
+                f'ROOT_HTTP_HOST={lan_ip} ROOT_HTTP_PORT={port} '
+                'python3 -m backend.app',
+                flush=True
+            )
+    else:
+        print(
+            f' -- Peer apuntando a HTTP raiz: {", ".join(get_root_http_url_candidates())}',
+            flush=True
+        )
+        print(
+            ' -- Peer apuntando a P2P raiz: '
+            f'{os.environ.get("P2P_ROOT_HOST", P2P_ROOT_HOST)}:'
+            f'{env_int("P2P_ROOT_PORT", P2P_ROOT_PORT)}',
+            flush=True
+        )
+
+
+def print_root_http_preflight(root_urls):
+    headers = {'Connection': 'close'}
+
+    for root_url in root_urls:
+        try:
+            result = requests.get(f'{root_url}/health', headers=headers, timeout=2)
+            result.raise_for_status()
+            print(f'\n -- Preflight HTTP raiz OK: {root_url}/health', flush=True)
+            return True
+        except Exception as e:
+            print(
+                f'\n -- Preflight HTTP raiz fallo contra {root_url}/health: {e}',
+                flush=True
+            )
+
+    print(
+        ' -- Si el nodo raiz no muestra un GET /health desde este equipo, '
+        'el peer no esta llegando al backend raiz. Revisa que la IP sea la LAN correcta, '
+        'que el root use HOST=0.0.0.0 y que macOS/firewall permita conexiones entrantes '
+        'a Python en los puertos HTTP y P2P.',
+        flush=True
+    )
+    return False
+
+
 def get_root_network_status():
     if get_p2p_mode() != 'peer':
         return None
@@ -244,6 +315,33 @@ def local_network_status_snapshot():
 
     return {
         **network.status(),
+        'lan_ip': get_lan_ip(),
+        'api_port': int(os.environ.get('PORT', PORT)),
+        'node_id': NODE_ID
+    }
+
+
+def passive_network_status_snapshot():
+    if p2p_network is None:
+        return {
+            'node_id': NODE_ID,
+            'mode': get_p2p_mode(),
+            'host': os.environ.get('P2P_SOCKET_HOST', '0.0.0.0'),
+            'port': P2P_SOCKET_PORT,
+            'root_host': os.environ.get('P2P_ROOT_HOST', P2P_ROOT_HOST),
+            'root_port': env_int('P2P_ROOT_PORT', P2P_ROOT_PORT),
+            'connected': False,
+            'peer_count': 0,
+            'connection_count': 0,
+            'peers': [],
+            'started': False,
+            'lan_ip': get_lan_ip(),
+            'api_port': int(os.environ.get('PORT', PORT))
+        }
+
+    return {
+        **p2p_network.status(),
+        'started': True,
         'lan_ip': get_lan_ip(),
         'api_port': int(os.environ.get('PORT', PORT)),
         'node_id': NODE_ID
@@ -695,6 +793,13 @@ def route_health():
         'status': 'ok',
         'node_id': NODE_ID,
         'mode': get_p2p_mode(),
+        'http_host': os.environ.get('HOST', '0.0.0.0'),
+        'api_port': int(os.environ.get('PORT', PORT)),
+        'lan_ip': get_lan_ip(),
+        'lan_ips': get_lan_ip_candidates(),
+        'p2p_host': os.environ.get('P2P_SOCKET_HOST', '0.0.0.0'),
+        'p2p_port': P2P_SOCKET_PORT,
+        'request_remote_addr': request.remote_addr,
         'blockchain_length': len(blockchain.chain),
         'pending_transactions': len(transaction_pool.transaction_data())
     })
@@ -800,6 +905,40 @@ def route_network_status():
         })
 
     return jsonify(status)
+
+@app.route('/network/diagnostics')
+def route_network_diagnostics():
+    mode = get_p2p_mode()
+    api_port = int(os.environ.get('PORT', PORT))
+    lan_ips = get_lan_ip_candidates()
+    diagnostics = {
+        'node_id': NODE_ID,
+        'mode': mode,
+        'request_remote_addr': request.remote_addr,
+        'request_host': request.host,
+        'http_host': os.environ.get('HOST', '0.0.0.0'),
+        'api_port': api_port,
+        'lan_ips': lan_ips,
+        'p2p_socket_host': os.environ.get('P2P_SOCKET_HOST', '0.0.0.0'),
+        'p2p_socket_port': P2P_SOCKET_PORT,
+        'p2p_root_host': os.environ.get('P2P_ROOT_HOST', P2P_ROOT_HOST),
+        'p2p_root_port': env_int('P2P_ROOT_PORT', P2P_ROOT_PORT),
+        'root_http_urls': get_root_http_url_candidates() if mode == 'peer' else [],
+        'network_status': passive_network_status_snapshot()
+    }
+
+    if mode == 'server':
+        diagnostics['peer_command_examples'] = [
+            (
+                f'HOST=0.0.0.0 PORT=5001 P2P_MODE=peer '
+                f'P2P_ROOT_HOST={lan_ip} P2P_ROOT_PORT={P2P_SOCKET_PORT} '
+                f'ROOT_HTTP_HOST={lan_ip} ROOT_HTTP_PORT={api_port} '
+                'python3 -m backend.app'
+            )
+            for lan_ip in lan_ips
+        ]
+
+    return jsonify(diagnostics)
 
 @app.route('/wallet/transact', methods=['POST'])
 def route_wallet_transact():
@@ -922,6 +1061,7 @@ def sync_with_root_node():
     headers = {'Connection': 'close'}
     last_error = None
     root_urls = get_root_http_url_candidates()
+    print_root_http_preflight(root_urls)
 
     for attempt in range(1, 4):
         for root_url in root_urls:
@@ -998,6 +1138,7 @@ def main():
     if os.environ.get('SEED_DATA') == 'True' or should_seed_root:
         seed_data()
 
+    print_startup_network_summary(mode, port)
     get_network()
 
     if mode == 'peer':
