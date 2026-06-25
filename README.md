@@ -119,6 +119,17 @@ Nodo peer:
 HOST=0.0.0.0 PORT=5051 P2P_MODE=peer P2P_TRANSPORT=pubnub P2P_CLOUD_CHANNEL=hopecoin-clase python3 -m backend.app
 ```
 
+En modo PubNub, cada UI debe apuntar al backend local de esa misma computadora:
+```
+# UI del nodo raiz, en la Mac raiz
+cd frontend_ui
+HOST=0.0.0.0 PORT=3000 REACT_APP_API_BASE_URL=http://localhost:5050 npm start
+
+# UI del peer, en la Mac peer
+cd frontend_ui
+HOST=0.0.0.0 PORT=3001 REACT_APP_API_BASE_URL=http://localhost:5051 npm start
+```
+
 5. En cada computadora participante, iniciar su UI apuntando a su propio backend:
 ```
 cd frontend_ui
