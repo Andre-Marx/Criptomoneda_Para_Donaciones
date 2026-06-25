@@ -42,6 +42,8 @@ mining_stop_event = threading.Event()
 root_network_status_lock = threading.Lock()
 root_network_status_cache = {}
 ROOT_NETWORK_STATUS_CACHE_TTL = 30
+ROOT_PORT = 5000
+PORT = int(os.environ.get('PORT', ROOT_PORT))
 os.environ.setdefault('P2P_ALLOW_DIFFICULTY_JUMP', 'True')
 
 NODE_ID = os.environ.get('NODE_ID', f'{socket.gethostname()}-{str(uuid.uuid4())[:6]}')
@@ -142,11 +144,51 @@ def get_p2p_mode():
     return os.environ.get('P2P_MODE', 'server').lower()
 
 
-def get_root_http_url():
-    root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
-    root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
+def env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
 
-    return f'http://{root_host}:{root_port}'
+
+def get_root_http_host():
+    return os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
+
+
+def get_root_http_url_candidates():
+    root_host = get_root_http_host()
+    configured_http_port = os.environ.get('ROOT_HTTP_PORT')
+    p2p_root_port = env_int('P2P_ROOT_PORT', P2P_ROOT_PORT)
+    candidate_ports = []
+
+    if configured_http_port is not None:
+        configured_port = env_int('ROOT_HTTP_PORT', ROOT_PORT)
+
+        if configured_port == p2p_root_port and configured_port != ROOT_PORT:
+            print(
+                '\n -- ROOT_HTTP_PORT apunta al puerto P2P '
+                f'({configured_port}); intentando HTTP primero en {ROOT_PORT}.',
+                flush=True
+            )
+            candidate_ports.append(ROOT_PORT)
+
+        candidate_ports.append(configured_port)
+    else:
+        candidate_ports.append(ROOT_PORT)
+
+    if ROOT_PORT not in candidate_ports:
+        candidate_ports.append(ROOT_PORT)
+
+    unique_ports = []
+    for port in candidate_ports:
+        if port not in unique_ports:
+            unique_ports.append(port)
+
+    return [f'http://{root_host}:{port}' for port in unique_ports]
+
+
+def get_root_http_url():
+    return get_root_http_url_candidates()[0]
 
 
 def get_root_network_status():
@@ -876,35 +918,35 @@ def route_transactions_test():
 
     return jsonify(transaction_pool.transaction_data())
 
-ROOT_PORT = 5000
-PORT = int(os.environ.get('PORT', ROOT_PORT))
-
-
 def sync_with_root_node():
-    root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
-    root_port = int(os.environ.get('ROOT_HTTP_PORT', ROOT_PORT))
-    root_url = f'http://{root_host}:{root_port}'
     headers = {'Connection': 'close'}
     last_error = None
+    root_urls = get_root_http_url_candidates()
 
     for attempt in range(1, 4):
-        try:
-            result = requests.get(f'{root_url}/blockchain', headers=headers, timeout=5)
-            result.raise_for_status()
-            chain_json = result.json()
-            print(f'\n -- Cadena remota recibida por HTTP: {len(chain_json)} bloques')
+        for root_url in root_urls:
+            try:
+                result = requests.get(f'{root_url}/blockchain', headers=headers, timeout=5)
+                result.raise_for_status()
+                chain_json = result.json()
+                print(f'\n -- Cadena remota recibida por HTTP desde {root_url}: {len(chain_json)} bloques')
 
-            accept_network_chain(chain_json, authoritative=True)
+                accept_network_chain(chain_json, authoritative=True)
 
-            transactions_result = requests.get(f'{root_url}/transactions', headers=headers, timeout=5)
-            transactions_result.raise_for_status()
-            replace_transaction_pool(transactions_result.json())
-            print('\n -- Cadena local y mempool sincronizados por HTTP')
-            return True
-        except Exception as e:
-            last_error = e
-            print(f'\n -- Sincronizacion HTTP inicial intento {attempt}/3 fallida: {e}', flush=True)
-            time.sleep(1)
+                transactions_result = requests.get(f'{root_url}/transactions', headers=headers, timeout=5)
+                transactions_result.raise_for_status()
+                replace_transaction_pool(transactions_result.json())
+                print('\n -- Cadena local y mempool sincronizados por HTTP')
+                return True
+            except Exception as e:
+                last_error = f'{root_url}: {e}'
+                print(
+                    f'\n -- Sincronizacion HTTP inicial intento {attempt}/3 fallida '
+                    f'contra {root_url}: {e}',
+                    flush=True
+                )
+
+        time.sleep(1)
 
     print(f'\n -- Sincronizacion HTTP inicial no disponible: {last_error}', flush=True)
     print(' -- Se intentara sincronizar por P2P al conectar con el nodo raiz.', flush=True)

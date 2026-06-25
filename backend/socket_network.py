@@ -7,6 +7,7 @@ import time
 P2P_PROTOCOL_VERSION = 3
 HANDSHAKE_TIMEOUT_SECONDS = 12
 HANDSHAKE_RETRY_SECONDS = 2
+HTTP_METHODS = ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS')
 
 
 class SocketNetwork:
@@ -151,7 +152,10 @@ class SocketNetwork:
         while True:
             while '\n' in buffer:
                 line, buffer = buffer.split('\n', 1)
-                self._handle_line(line, source_socket, peer_id, address)
+                should_continue = self._handle_line(line, source_socket, peer_id, address)
+
+                if should_continue is False:
+                    return
 
             try:
                 chunk = source_socket.recv(65536)
@@ -206,38 +210,53 @@ class SocketNetwork:
 
     def _handle_line(self, line, source_socket, peer_id=None, address=None):
         if not line.strip():
-            return
+            return True
 
         try:
             message = json.loads(line)
         except json.JSONDecodeError as e:
+            if peer_id and not self._is_active_peer_socket(peer_id, source_socket):
+                if self._looks_like_http_request(line):
+                    self._send_wrong_port_http_response(source_socket)
+                    print(
+                        f'\n -- Solicitud HTTP recibida en el puerto P2P desde {peer_id}. '
+                        'Usa el puerto HTTP del nodo raiz (por defecto 5000), no P2P_ROOT_PORT.',
+                        flush=True
+                    )
+                else:
+                    print(f'\n -- HELLO P2P invalido desde {peer_id}: {e}', flush=True)
+
+                return False
+
             print(f'\n -- Mensaje P2P invalido ignorado: {e}')
-            return
+            return True
 
         if message.get('type') == 'HELLO':
             self._register_hello(peer_id, source_socket, address, message)
-            return
+            return True
 
         if message.get('type') == 'HELLO_REQUEST':
             if self.mode == 'peer':
                 self._send_line(source_socket, self._hello_payload())
-            return
+            return True
 
         if message.get('type') == 'HELLO_ACK':
-            return
+            return True
 
         if self.mode == 'server' and peer_id and not self._is_active_peer_socket(peer_id, source_socket):
             print(
                 f'\n -- Mensaje P2P ignorado antes de HELLO ({peer_id}): {message.get("type")}',
                 flush=True
             )
-            return
+            return True
 
         if self.on_message:
             self.on_message(message, peer_id=peer_id)
 
         if self.mode == 'server' and message.get('type') not in ('SYNC_REQUEST', 'SYNC_STATE'):
             self._broadcast_to_clients(message, exclude_peer_id=peer_id)
+
+        return True
 
     def _register_hello(self, peer_id, client_socket, address, message):
         if not peer_id:
@@ -350,6 +369,28 @@ class SocketNetwork:
 
         with write_lock:
             destination_socket.sendall(payload)
+
+    def _looks_like_http_request(self, line):
+        stripped_line = line.lstrip()
+        return any(stripped_line.startswith(f'{method} ') for method in HTTP_METHODS)
+
+    def _send_wrong_port_http_response(self, destination_socket):
+        body = (
+            'Este puerto es para P2P. Usa el puerto HTTP del backend '
+            'del nodo raiz, normalmente 5000.\n'
+        ).encode('utf-8')
+        response = (
+            'HTTP/1.1 400 Bad Request\r\n'
+            'Connection: close\r\n'
+            'Content-Type: text/plain; charset=utf-8\r\n'
+            f'Content-Length: {len(body)}\r\n'
+            '\r\n'
+        ).encode('utf-8') + body
+
+        try:
+            destination_socket.sendall(response)
+        except OSError:
+            pass
 
     def _hello_payload(self):
         return {
