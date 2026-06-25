@@ -26,7 +26,8 @@ class SocketNetwork:
         self.mode = mode
         self.host = host
         self.port = port
-        self.root_host = root_host
+        self.original_root_host = root_host
+        self.root_host = normalize_local_host(root_host) if mode == 'peer' else root_host
         self.root_port = root_port
         self.server_socket = None
         self.root_socket = None
@@ -56,6 +57,12 @@ class SocketNetwork:
             f'(codigo: {__file__})',
             flush=True
         )
+        if self.mode == 'peer' and self.root_host != self.original_root_host:
+            print(
+                f'\n -- P2P_ROOT_HOST {self.original_root_host} pertenece a esta misma maquina; '
+                f'usando {self.root_host} para evitar el hairpin LAN de macOS.',
+                flush=True
+            )
 
         if self.mode == 'peer':
             threading.Thread(target=self._connect_to_root, daemon=True).start()
@@ -782,6 +789,28 @@ def get_lan_ip_candidates():
 
 def get_lan_ip():
     return get_lan_ip_candidates()[0]
+
+
+def normalize_local_host(host):
+    if not host:
+        return host
+
+    if host in ('localhost', '127.0.0.1'):
+        return '127.0.0.1'
+
+    try:
+        resolved_host = socket.gethostbyname(host)
+    except OSError:
+        resolved_host = host
+
+    if resolved_host in get_lan_ip_candidates():
+        return '127.0.0.1'
+
+    return host
+
+
+def host_is_local_machine(host):
+    return normalize_local_host(host) == '127.0.0.1' and host not in ('localhost', '127.0.0.1')
 
 
 def _lan_ip_priority(ip):

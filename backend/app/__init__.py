@@ -17,7 +17,7 @@ from backend.config import MINING_REWARD, P2P_MINING_DIFFICULTY, P2P_ROOT_HOST, 
 from backend.wallet.wallet import Wallet
 from backend.wallet.transaction import Transaction
 from backend.wallet.transaction_pool import TransactionPool
-from backend.socket_network import SocketNetwork, get_lan_ip, get_lan_ip_candidates
+from backend.socket_network import SocketNetwork, get_lan_ip, get_lan_ip_candidates, host_is_local_machine, normalize_local_host
 
 
 class QuietWSGIRequestHandler(WSGIRequestHandler):
@@ -157,7 +157,12 @@ def env_int(name, default):
 
 
 def get_root_http_host():
-    return os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
+    root_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
+
+    if get_p2p_mode() == 'peer':
+        return normalize_local_host(root_host)
+
+    return root_host
 
 
 def get_root_http_url_candidates():
@@ -210,6 +215,17 @@ def print_startup_network_summary(mode, port):
     for lan_ip in lan_ips:
         print(f' -- URL HTTP LAN: http://{lan_ip}:{port}', flush=True)
 
+    if mode == 'server':
+        print(
+            f' -- En esta misma Mac prueba con: curl http://localhost:{port}/health',
+            flush=True
+        )
+        print(
+            ' -- La URL HTTP LAN debe probarse desde otra computadora. '
+            'macOS puede resetear conexiones hairpin hacia su propia IP LAN.',
+            flush=True
+        )
+
     if host in ('127.0.0.1', 'localhost'):
         print(
             ' -- ADVERTENCIA: HOST esta limitado a localhost; otros equipos no podran '
@@ -239,13 +255,20 @@ def print_startup_network_summary(mode, port):
                 flush=True
             )
     else:
+        original_http_host = os.environ.get('ROOT_HTTP_HOST', os.environ.get('P2P_ROOT_HOST', 'localhost'))
+        if host_is_local_machine(original_http_host):
+            print(
+                f' -- ROOT_HTTP_HOST {original_http_host} pertenece a esta misma maquina; '
+                'usando localhost para evitar el hairpin LAN de macOS.',
+                flush=True
+            )
         print(
             f' -- Peer apuntando a HTTP raiz: {", ".join(get_root_http_url_candidates())}',
             flush=True
         )
         print(
             ' -- Peer apuntando a P2P raiz: '
-            f'{os.environ.get("P2P_ROOT_HOST", P2P_ROOT_HOST)}:'
+            f'{normalize_local_host(os.environ.get("P2P_ROOT_HOST", P2P_ROOT_HOST))}:'
             f'{env_int("P2P_ROOT_PORT", P2P_ROOT_PORT)}',
             flush=True
         )

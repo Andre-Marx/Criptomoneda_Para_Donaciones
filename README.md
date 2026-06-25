@@ -70,12 +70,17 @@ El nodo raiz carga datos simulados automaticamente. Si quieres iniciarlo sin dat
 Antes de abrir la UI, verifica que el backend responda:
 ```
 curl http://localhost:5050/health
+```
+Desde otra computadora en la misma WiFi, verifica la IP LAN del nodo raiz:
+```
 curl http://TU_IP_LOCAL:5050/health
 curl http://TU_IP_LOCAL:5050/network/diagnostics
 ```
 Si `localhost` responde pero `TU_IP_LOCAL` no, la IP elegida no es la correcta o macOS/firewall esta bloqueando conexiones entrantes para Python.
 
-Evita usar `PORT=5000` y `P2P_SOCKET_PORT=7000` en macOS para esta demo LAN. Esos puertos suelen chocar con AirPlay/servicios del sistema o reglas especiales de firewall: el sintoma típico es que `curl http://localhost:5000/health` funciona, pero `curl http://TU_IP_LOCAL:5000/health` responde `Connection reset by peer` incluso en la misma computadora.
+No uses `curl http://TU_IP_LOCAL:5050/health` desde la misma Mac que corre el nodo raiz para decidir si la LAN funciona. En algunas configuraciones de macOS esa conexion hairpin hacia su propia IP LAN se resetea aunque `localhost` funcione. La IP LAN debe probarse desde la computadora peer.
+
+Evita usar `PORT=5000` y `P2P_SOCKET_PORT=7000` en macOS para esta demo LAN. Esos puertos suelen chocar con AirPlay/servicios del sistema o reglas especiales de firewall: el sintoma típico es que `curl http://localhost:5000/health` funciona, pero `curl http://TU_IP_LOCAL:5000/health` responde `Connection reset by peer`.
 
 Si el peer muestra `Connection reset by peer` pero en la terminal del nodo raiz no aparece ningun `GET /health`, `GET /blockchain` o `Conexion P2P entrante` desde la IP del peer, la conexion no esta llegando al backend raiz. En ese caso revisa estos puntos antes de seguir con el minado:
 - El nodo raiz debe imprimirse como `HTTP escuchara en 0.0.0.0:5050` y `P2P escuchara en 0.0.0.0:17000`.
