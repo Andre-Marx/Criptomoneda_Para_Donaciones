@@ -39,6 +39,10 @@ class SocketNetwork:
             'status': 'not_run',
             'message': 'Autoprueba P2P local no ejecutada.'
         }
+        self.root_probe = {
+            'status': 'not_run',
+            'message': 'Preflight P2P al nodo raiz no ejecutado.'
+        }
 
     def start(self):
         if self.started:
@@ -79,7 +83,8 @@ class SocketNetwork:
             'peer_count': len(unique_peer_ids),
             'connection_count': len(peers),
             'peers': peers,
-            'self_check': dict(self.self_check)
+            'self_check': dict(self.self_check),
+            'root_probe': dict(self.root_probe)
         }
 
     def broadcast(self, message):
@@ -126,6 +131,10 @@ class SocketNetwork:
                     f'{self.root_host}:{self.root_port}...',
                     flush=True
                 )
+
+                if os.environ.get('P2P_PEER_PROBE', 'True') == 'True':
+                    self._probe_root_p2p(attempt)
+
                 root_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._enable_tcp_low_latency(root_socket)
                 self._set_socket_timeout(root_socket, 10)
@@ -169,6 +178,70 @@ class SocketNetwork:
 
                 self._close_socket(root_socket)
                 time.sleep(min(30, 3 + attempt))
+
+    def _probe_root_p2p(self, attempt):
+        probe_socket = None
+
+        try:
+            self.root_probe = {
+                'status': 'running',
+                'target': f'{self.root_host}:{self.root_port}',
+                'attempt': attempt,
+                'message': 'Probando P2P PING/PONG con el nodo raiz.'
+            }
+            probe_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._enable_tcp_low_latency(probe_socket)
+            self._set_socket_timeout(probe_socket, 5)
+            probe_socket.connect((self.root_host, self.root_port))
+            print(
+                f'\n -- Preflight P2P abierto desde {probe_socket.getsockname()} '
+                f'hacia {self.root_host}:{self.root_port}; enviando PING...',
+                flush=True
+            )
+            self._send_line(probe_socket, {
+                'type': 'PING',
+                'node_id': self.node_id,
+                'probe': 'peer-preflight',
+                'attempt': attempt,
+                'protocol_version': P2P_PROTOCOL_VERSION
+            })
+            response = self._recv_json_line(probe_socket)
+
+            if response.get('type') != 'PONG':
+                raise ConnectionError(f'Preflight P2P recibio {response.get("type")} en vez de PONG')
+
+            self.root_probe = {
+                'status': 'ok',
+                'target': f'{self.root_host}:{self.root_port}',
+                'attempt': attempt,
+                'message': 'Preflight P2P PING/PONG OK; se intentara HELLO real.'
+            }
+            print(f'\n -- {self.root_probe["message"]}', flush=True)
+        except OSError as e:
+            self.root_probe = {
+                'status': 'failed',
+                'target': f'{self.root_host}:{self.root_port}',
+                'attempt': attempt,
+                'message': f'Preflight P2P fallo antes de PONG: {self._format_socket_error(e)}'
+            }
+            print(f'\n -- {self.root_probe["message"]}', flush=True)
+            if self._is_connection_reset(e):
+                raise ConnectionResetError(
+                    getattr(e, 'errno', 54),
+                    'El nodo raiz reinicio la conexion durante el preflight P2P PING/PONG'
+                )
+            raise
+        except Exception as e:
+            self.root_probe = {
+                'status': 'failed',
+                'target': f'{self.root_host}:{self.root_port}',
+                'attempt': attempt,
+                'message': f'Preflight P2P fallo: {e}'
+            }
+            print(f'\n -- {self.root_probe["message"]}', flush=True)
+            raise
+        finally:
+            self._close_socket(probe_socket)
 
     def _print_peer_connection_hint(self):
         print(
