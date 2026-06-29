@@ -3,6 +3,7 @@
 @author: Andre-Puente
 """
 
+import os
 import time
 from backend.util.crypto_hash import crypto_hash
 from backend.config import MINE_RATE
@@ -61,23 +62,41 @@ class Block:
         return self.__dict__
 
     @staticmethod
-    def mine_block(last_block, data):
+    def mine_block(last_block, data, difficulty=None, progress_callback=None, stop_event=None):
         """
         Mina un bloque basado en el bloque anterior y datos dados, hasta que se encuentre un hash de bloque que cumpla con el requisito de prueba de trabajo del lìder 0.
         """
         timestamp = time.time_ns()
         last_hash = last_block.hash
-        difficulty = Block.adjust_difficulty(last_block, timestamp)
+        difficulty = difficulty or Block.adjust_difficulty(last_block, timestamp)
         nonce = 0
         number = int(last_block.number) + 1
         hash = crypto_hash(timestamp, last_hash, data, difficulty, nonce, number)
 
         while hex_to_binary(hash)[0:difficulty] != '0'*difficulty:
+            if stop_event and stop_event.is_set():
+                return None
+
             nonce += 1
             timestamp = time.time_ns()
-            difficulty = Block.adjust_difficulty(last_block, timestamp)
             hash = crypto_hash(timestamp, last_hash, data, difficulty, nonce, number)
+
+            if progress_callback and nonce % 1000 == 0:
+                progress_callback({
+                    'nonce': nonce,
+                    'hash': hash,
+                    'difficulty': difficulty,
+                    'timestamp': timestamp
+                })
             #print(f'Nonce: {nonce} \nHash(transaccion + nonce): {hex_to_binary(hash)[0:10]}')
+
+        if progress_callback:
+            progress_callback({
+                'nonce': nonce,
+                'hash': hash,
+                'difficulty': difficulty,
+                'timestamp': timestamp
+            })
         
         return Block(timestamp, last_hash, hash, data, difficulty, nonce, number)
         
@@ -126,7 +145,9 @@ class Block:
         if hex_to_binary(block.hash)[0:block.difficulty] != '0' * block.difficulty:
             raise Exception('No se cumple la prueba de trabajo')
 
-        if abs(last_block.difficulty - block.difficulty) > 1:
+        allow_competition_difficulty = os.environ.get('P2P_ALLOW_DIFFICULTY_JUMP') == 'True'
+
+        if not allow_competition_difficulty and abs(last_block.difficulty - block.difficulty) > 1:
             raise Exception('La dificultad ajustada del bloque sólo puede variar por 1')
 
         reconstructed_hash = crypto_hash(

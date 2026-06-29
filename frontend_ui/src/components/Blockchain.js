@@ -1,9 +1,10 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {API_BASE_URL} from '../config';
+import {API_BASE_URL, SECONDS_JS} from '../config';
 import Block from './Block';
 import BrandHomeLink from './BrandHomeLink';
 
 const PAGE_RANGE = 3;
+const POLL_INTERVAL = 2 * SECONDS_JS;
 
 function Blockchain() {
     const [blockchain, setBlockchain] = useState([]);
@@ -49,12 +50,19 @@ function Blockchain() {
     }, []);
 
     const refreshBlockchain = useCallback(() => {
-        fetchBlockchainPage({start: 0, end: PAGE_RANGE, page: 0});
+        const start = currentPage * PAGE_RANGE;
+        const end = (currentPage + 1) * PAGE_RANGE;
+
+        fetchBlockchainPage({start, end, page: currentPage});
         fetchBlockchainLength();
-    }, [fetchBlockchainPage, fetchBlockchainLength]);
+    }, [currentPage, fetchBlockchainPage, fetchBlockchainLength]);
 
     useEffect(() => {
         refreshBlockchain();
+
+        const intervalId = setInterval(refreshBlockchain, POLL_INTERVAL);
+
+        return () => clearInterval(intervalId);
     }, [refreshBlockchain]);
 
     const pageCount = Math.ceil(blockchainLength / PAGE_RANGE);

@@ -18,11 +18,11 @@ class Wallet:
     Permite a los mineros autorizar transacciones.
     """
 
-    def __init__(self, blockchain=None):
+    def __init__(self, blockchain=None, private_key=None):
         self.blockchain = blockchain
         #self.address = str(uuid.uuid4())[:8]
         # self.private_key = ec.generate_private_key(ec.ed25519(), default_backend)
-        self.private_key = ed25519.Ed25519PrivateKey.generate()
+        self.private_key = private_key or ed25519.Ed25519PrivateKey.generate()
         self.public_key = self.private_key.public_key()
         self.address = self.generate_address()
         self.serialize_public_key()
@@ -35,7 +35,7 @@ class Wallet:
         """
         Genera la firma basada en los datos y la llave privada local.
         """
-        data_hashing = hashlib.sha512(str(data).encode('utf-8')).digest()
+        data_hashing = hashlib.sha512(json.dumps(data, sort_keys=True).encode('utf-8')).digest()
         return self.private_key.sign(data_hashing).hex()
 
     def serialize_public_key(self):
@@ -77,7 +77,7 @@ class Wallet:
         """
         Verifica una firma basada en la llave pública y datos originales.
         """
-        data_hashing = hashlib.sha512(str(data).encode('utf-8')).digest()
+        data_hashing = hashlib.sha512(json.dumps(data, sort_keys=True).encode('utf-8')).digest()
 
         # Se convierte en una instancia de cryptography
         deserialized_public_key = serialization.load_pem_public_key(public_key.encode('utf-8'))
@@ -99,6 +99,17 @@ class Wallet:
 
         except InvalidSignature:
             return False
+
+    @staticmethod
+    def from_seed(seed, blockchain=None):
+        """
+        Genera una billetera reproducible a partir de una semilla estable.
+        Sirve para que todos los nodos compartan las mismas billeteras conocidas.
+        """
+        seed_hash = hashlib.sha256(str(seed).encode('utf-8')).digest()
+        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(seed_hash)
+
+        return Wallet(blockchain=blockchain, private_key=private_key)
 
     @staticmethod
     def calculate_balance(blockchain, address):

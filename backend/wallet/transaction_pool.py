@@ -11,6 +11,15 @@ class TransactionPool:
         """
         self.transaction_map[transaction.id] = transaction
 
+    def replace_transactions(self, transactions):
+        """
+        Reemplaza el transaction pool con una lista de transacciones ya validadas.
+        """
+        self.transaction_map = {
+            transaction.id: transaction
+            for transaction in transactions
+        }
+
     def existing_transaction(self, address):
         """
         Encuentre una transacción generada por la dirección en el grupo de transacciones. 

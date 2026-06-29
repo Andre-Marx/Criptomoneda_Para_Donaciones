@@ -2,8 +2,9 @@ import React, {useState, useEffect} from "react";
 import { useHistory } from 'react-router-dom';
 import { Link } from "react-router-dom";
 import logo from '../assets/hopecoin-logo.svg';
-import {API_BASE_URL} from '../config';
+import {API_BASE_URL, SECONDS_JS} from '../config';
 
+const DASHBOARD_POLL_INTERVAL = 2 * SECONDS_JS;
 
 function App() {
   const [walletInfo, setWalletInfo] = useState({});
@@ -37,12 +38,16 @@ function App() {
         setPendingTransactions(transactionsJson);
       })
       .catch(() => {
-        setError('No se pudo conectar con el backend. Ejecuta python3 -m backend.app en otra terminal.');
+        setError(`No se pudo conectar con el backend en ${API_BASE_URL}. Verifica que el backend esté corriendo y que esa IP sea accesible desde este navegador.`);
       });
   };
 
   useEffect(() => {
     fetchDashboard();
+
+    const intervalId = setInterval(fetchDashboard, DASHBOARD_POLL_INTERVAL);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const {address, balance} = walletInfo;
