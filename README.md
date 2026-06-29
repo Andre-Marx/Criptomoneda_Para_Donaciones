@@ -67,6 +67,8 @@ cd frontend_ui
 npm install
 ```
 
+Este comando crea la carpeta `frontend_ui/node_modules` en la computadora donde se ejecuta el proyecto. Esa carpeta no se debe subir al repositorio porque puede ser muy grande y depende del sistema donde se instale. Lo que sí se versiona es `package.json` y `package-lock.json`; con esos archivos, cualquier persona que descargue el repositorio puede reconstruir `node_modules` ejecutando `npm install`.
+
 ## Ejecutar el proyecto sin peer-to-peer
 
 Esta modalidad levanta un solo backend y una sola interfaz web. Es útil para revisar la blockchain, crear transacciones, minar bloques y probar el flujo completo sin conectar otras computadoras. El backend inicializa el servicio P2P en modo servidor, pero si no conectas otros peers puedes usarlo como una ejecución local de una sola instancia.
