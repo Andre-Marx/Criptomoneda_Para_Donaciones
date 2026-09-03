@@ -21,10 +21,11 @@ def test_mine_block():
     # Se valida que los datos sean los que recibió el bloque
     assert block.data == data
 
-    # Se valida que coincida el hash anterior
-    assert block.last_hash == last_block.hash
+    # Se valida que coincida la raíz de Merkle anterior
+    assert block.last_merkle_root == last_block.merkle_root
+    assert block.merkle_root == Block.calculate_merkle_root(data)
 
-    assert hex_to_binary(block.hash)[0:block.difficulty] == '0'*block.difficulty
+    assert hex_to_binary(block.proof_hash)[0:block.difficulty] == '0'*block.difficulty
 
 
 def test_genesis():
@@ -63,8 +64,9 @@ def test_slowly_mined_block():
 def test_mined_block_difficulty_limits_at_1():
     last_block = Block(
         time.time_ns(),
-        'test_last_hash',
-        'test_hash',
+        'test_last_merkle_root',
+        Block.calculate_merkle_root('test_data'),
+        'test_proof_hash',
         'test_data',
         1,
         0,
@@ -89,15 +91,15 @@ def block(last_block):
 def test_is_valid_block(last_block, block):
     Block.is_valid_block(last_block, block)
 
-def test_is_valid_block_bad_last_hash(last_block, block):
-    block.last_hash = 'evail_last_hash'
+def test_is_valid_block_bad_last_merkle_root(last_block, block):
+    block.last_merkle_root = 'evail_last_merkle_root'
 
     # Para que python espere una excepción
-    with pytest.raises(Exception, match = 'El "last_hash" del bloque debe ser correcto'):
+    with pytest.raises(Exception, match = 'raíz de Merkle anterior'):
         Block.is_valid_block(last_block, block)
 
 def test_is_valid_block_bad_proof_of_work(last_block, block):
-    block.hash = 'fff'
+    block.proof_hash = 'fff'
 
     # Para que python espere una excepción
     with pytest.raises(Exception, match = 'No se cumple la prueba de trabajo'):
@@ -106,14 +108,21 @@ def test_is_valid_block_bad_proof_of_work(last_block, block):
 def test_is_valid_block_jumped_difficulty(last_block, block):
     jumped_difficulty = 10
     block.difficulty = jumped_difficulty
-    block.hash = f'{"0" * jumped_difficulty}111abc'
+    block.proof_hash = f'{"0" * jumped_difficulty}111abc'
 
     # Para que python espere una excepción
     with pytest.raises(Exception, match = 'La dificultad ajustada del bloque sólo puede variar por 1'):
         Block.is_valid_block(last_block, block)
 
-def test_id_valid_block_bad_block_hash(last_block, block):
-    block.hash = '0000000000000000000000000adbbcc'
+def test_is_valid_block_bad_proof_hash(last_block, block):
+    block.proof_hash = '0000000000000000000000000adbbcc'
     # Para que python espere una excepción
-    with pytest.raises(Exception, match = 'El hash del bloque debe ser correcto'):
+    with pytest.raises(Exception, match = 'hash de prueba de trabajo'):
+        Block.is_valid_block(last_block, block)
+
+
+def test_is_valid_block_bad_merkle_root(last_block, block):
+    block.merkle_root = 'raiz-manipulada'
+
+    with pytest.raises(Exception, match = 'raíz de Merkle del bloque'):
         Block.is_valid_block(last_block, block)

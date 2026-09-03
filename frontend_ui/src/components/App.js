@@ -94,7 +94,7 @@ function App() {
           <Link className="action-card" to="/blockchain">
             <span className="action-icon">▦</span>
             <strong>Ver blockchain</strong>
-            <small>Explora bloques, hashes y transacciones minadas.</small>
+            <small>Explora bloques, raíces de Merkle y transacciones minadas.</small>
           </Link>
 
           <Link className="action-card" to="/conduct-transaction">

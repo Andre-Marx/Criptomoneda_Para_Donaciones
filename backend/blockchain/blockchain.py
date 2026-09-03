@@ -105,7 +105,7 @@ class Blockchain:
 
                 if transaction.input == MINING_REWARD_INPUT:
                     if has_mining_reward:
-                        raise Exception(f'Sólo puede haber una recompensa de minería por bloque. \n Revisar el bloque con hash: {block.hash}')
+                        raise Exception(f'Sólo puede haber una recompensa de minería por bloque. \n Revisar el bloque con raíz de Merkle: {block.merkle_root}')
                     has_mining_reward = True
                     Transaction.is_valid_transaction(transaction)
 

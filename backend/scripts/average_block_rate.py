@@ -23,5 +23,5 @@ for i in range(100):
     print(f'Difiutad de un nuevo bloque: {blockchain.chain[-1].difficulty}')
     print(f'Tiempo para minar un nuevo bloque: {time_to_mine}s')
     print(f'Tiempo promedio para añadir bloques: {average_time}s')
-    print(f'Hash: {blockchain.chain[-1].hash}')
+    print(f'Raíz de Merkle: {blockchain.chain[-1].merkle_root}')
     print(f'Nonce: {blockchain.chain[-1].nonce}\n')
