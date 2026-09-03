@@ -78,7 +78,7 @@ function Blockchain() {
                 <div>
                     <p className="eyebrow">Ledger HopeCoin</p>
                     <h2>Ver blockchain</h2>
-                    <p>Bloques minados, hashes enlazados y transacciones registradas.</p>
+                    <p>Bloques minados, raíces de Merkle enlazadas y transacciones registradas.</p>
                 </div>
                 <button className="ghost-button" type="button" onClick={refreshBlockchain}>
                     Actualizar
@@ -107,7 +107,7 @@ function Blockchain() {
                     blockchain.length > 0
                         ? blockchain.map((block, index) => (
                             <Block
-                                key={block.hash}
+                                key={block.merkle_root}
                                 block={block}
                                 isLatest={currentPage === 0 && index === 0}
                             />

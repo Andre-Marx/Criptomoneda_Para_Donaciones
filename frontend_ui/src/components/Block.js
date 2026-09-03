@@ -26,7 +26,7 @@ function formatBlockData(value) {
 
 function Block({block, isLatest}) {
     const [isExpanded, setIsExpanded] = useState(false);
-    const {timestamp, hash, difficulty, last_hash, nonce, number} = block;
+    const {timestamp, merkle_root, difficulty, last_merkle_root, nonce, number} = block;
     const data = Array.isArray(block.data) ? block.data : [];
     const hasRawData = !Array.isArray(block.data) && block.data;
     const timestampDisplay = new Date(timestamp / MILLISECONDS_PY).toLocaleString();
@@ -55,12 +55,12 @@ function Block({block, isLatest}) {
 
                 <div className="block-header-grid">
                     <div className="header-field">
-                        <span>Hash</span>
-                        <code title={hash}>{shortenHash(hash)}</code>
+                        <span>Raíz de Merkle</span>
+                        <code title={merkle_root}>{shortenHash(merkle_root)}</code>
                     </div>
                     <div className="header-field">
-                        <span>Hash anterior</span>
-                        <code title={last_hash}>{shortenHash(last_hash)}</code>
+                        <span>Raíz de Merkle anterior</span>
+                        <code title={last_merkle_root}>{shortenHash(last_merkle_root)}</code>
                     </div>
                     <div className="header-field">
                         <span>Timestamp</span>

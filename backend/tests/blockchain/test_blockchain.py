@@ -11,7 +11,7 @@ def test_blockchain_instance():
     '''
     
     blockchain = Blockchain()
-    assert blockchain.chain[0].hash == GENESIS_DATA['hash']
+    assert blockchain.chain[0].merkle_root == GENESIS_DATA['merkle_root']
 
 
 def test_add_block():
@@ -37,7 +37,7 @@ def test_is_valid_chain(blockchain_three_blocks):
     Blockchain.is_valid_chain(blockchain_three_blocks.chain)
 
 def test_is_valid_chain_bad_genesis(blockchain_three_blocks):
-    blockchain_three_blocks.chain[0].hash = 'evil_hash'
+    blockchain_three_blocks.chain[0].merkle_root = 'evil_merkle_root'
 
     with pytest.raises(Exception, match = 'El bloque genesis debe ser valido'):
         Blockchain.is_valid_chain(blockchain_three_blocks.chain)
@@ -58,7 +58,7 @@ def test_replace_chain_not_longer(blockchain_three_blocks):
 
 def test_replace_chain_bad_chain(blockchain_three_blocks):
     blockchain = Blockchain()
-    blockchain_three_blocks.chain[1].hash = 'evil_hash'
+    blockchain_three_blocks.chain[1].merkle_root = 'evil_merkle_root'
 
     with pytest.raises(Exception, match = 'La cadena entrante es invalida'):
         blockchain.replace_chain(blockchain_three_blocks.chain)

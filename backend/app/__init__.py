@@ -597,17 +597,17 @@ def accept_network_block(block_json, winner_node_id=None, winner_address=None):
     block = Block.from_json(block_json)
 
     with chain_lock:
-        if block.hash in set(map(lambda chain_block: chain_block.hash, blockchain.chain)):
+        if block.proof_hash in set(map(lambda chain_block: chain_block.proof_hash, blockchain.chain)):
             mark_mining_winner(
                 winner_node_id,
                 winner_address=winner_address,
-                block_hash=block.hash,
+                block_hash=block.proof_hash,
                 nonce=block.nonce,
                 difficulty=block.difficulty
             )
             return False
 
-        if block.last_hash != blockchain.chain[-1].hash:
+        if block.last_merkle_root != blockchain.chain[-1].merkle_root:
             return False
 
         Block.is_valid_block(blockchain.chain[-1], block)
@@ -619,7 +619,7 @@ def accept_network_block(block_json, winner_node_id=None, winner_address=None):
     mark_mining_winner(
         winner_node_id,
         winner_address=winner_address,
-        block_hash=block.hash,
+        block_hash=block.proof_hash,
         nonce=block.nonce,
         difficulty=block.difficulty
     )
@@ -635,7 +635,7 @@ def accept_network_chain(chain_json, authoritative=False):
     with chain_lock:
         has_same_tip = (
             len(incoming_blockchain.chain) == len(blockchain.chain)
-            and incoming_blockchain.chain[-1].hash == blockchain.chain[-1].hash
+            and incoming_blockchain.chain[-1].merkle_root == blockchain.chain[-1].merkle_root
         )
 
         if has_same_tip:
@@ -818,7 +818,7 @@ def mine_competition_block(transaction_data, last_block):
         return
 
     with chain_lock:
-        if blockchain.chain[-1].hash != last_block.hash:
+        if blockchain.chain[-1].merkle_root != last_block.merkle_root:
             with mining_lock:
                 mining_state.update({
                     'status': 'stopped',
@@ -835,7 +835,7 @@ def mine_competition_block(transaction_data, last_block):
             'status': 'won',
             'is_mining': False,
             'nonce': block.nonce,
-            'hash': block.hash,
+            'hash': block.proof_hash,
             'difficulty': block.difficulty,
             'winner': NODE_ID,
             'winner_address': wallet.address,
@@ -846,7 +846,7 @@ def mine_competition_block(transaction_data, last_block):
             'node_id': NODE_ID,
             'status': 'winner',
             'nonce': block.nonce,
-            'hash': block.hash,
+            'hash': block.proof_hash,
             'difficulty': block.difficulty,
             'updated_at': time.time()
         }
@@ -856,7 +856,7 @@ def mine_competition_block(transaction_data, last_block):
         'type': 'MINING_WINNER',
         'winner_node_id': NODE_ID,
         'winner_address': wallet.address,
-        'hash': block.hash,
+        'hash': block.proof_hash,
         'nonce': block.nonce,
         'difficulty': block.difficulty
     })
