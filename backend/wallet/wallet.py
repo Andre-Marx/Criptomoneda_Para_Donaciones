@@ -51,18 +51,18 @@ class Wallet:
         """
         Genera la dirección de una billetera partiendo de la clave pública usando el algoritmo de Pay-to-Public-Key-Hash (P2PKH).
         """
-        # Paso 1: SHA-256 de la clave pública
-        sha256_hash = hashlib.sha256(self.public_key.public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)).digest()
+        # Paso 1: SHA-512 de la clave pública
+        sha512_hash = hashlib.sha512(self.public_key.public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)).digest()
 
         # Paso 2: RIPEMD-160 del resultado del paso 1
-        ripemd160_hash = hashlib.new('ripemd160', sha256_hash).digest()
+        ripemd160_hash = hashlib.new('ripemd160', sha512_hash).digest()
 
         # Paso 3: Agregar un byte de versión (0x00 para direcciones P2PKH en la red principal de Bitcoin)
         version_byte = b'\x00'
         extended_ripemd160_hash = version_byte + ripemd160_hash
 
         # Paso 4: Calcular el checksum de la versión + hash160
-        checksum = hashlib.sha256(hashlib.sha256(extended_ripemd160_hash).digest()).digest()[:4]
+        checksum = hashlib.sha512(hashlib.sha512(extended_ripemd160_hash).digest()).digest()[:4]
 
         # Paso 5: Concatenar la versión + hash160 + checksum
         binary_address = extended_ripemd160_hash + checksum
