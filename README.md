@@ -209,7 +209,7 @@ Existen dos formas de ejecutar la red:
 - PubNub: recomendado para demos porque evita problemas de firewall o permisos de red. Todos los nodos usan un canal compartido y se comunican mediante conexiones salientes a internet.
 - Sockets TCP en WiFi local: usa conexiones directas dentro de la misma red WiFi. Requiere que la computadora raíz acepte conexiones entrantes en los puertos del backend y del P2P.
 
-### Modalidad P2P con PubNub
+### Modalidad P2P con PubNub - Para correr en diferentes redes WIFI
 
 En PubNub todos los nodos deben usar exactamente el mismo `P2P_CLOUD_CHANNEL`. Puedes cambiar el nombre del canal para cada clase o demostración; lo importante es que el nodo raíz y todos los peers usen el mismo valor.
 
